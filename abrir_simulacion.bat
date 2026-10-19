@@ -7,7 +7,9 @@ echo ===================================================================
 echo.
 
 set "WEBOTS_HOME=C:\Program Files\Webots"
-set "WORLD_PATH=%~dp0worlds\pista_montana_rusa.wbt"
+
+for %%I in ("%~dp0worlds\pista_montana_rusa.wbt") do set "SHORT_WORLD=%%~fsI"
+for %%I in ("%~dp0worlds\pista_montana_rusa.wbt") do set "FULL_WORLD=%%~fI"
 
 if not exist "%WEBOTS_HOME%\msys64\mingw64\bin\webotsw.exe" (
     echo [ERROR] No se encontro Webots en %WEBOTS_HOME%
@@ -17,33 +19,30 @@ if not exist "%WEBOTS_HOME%\msys64\mingw64\bin\webotsw.exe" (
     exit /b 1
 )
 
-if not exist "%WORLD_PATH%" (
+if not exist "%SHORT_WORLD%" (
     echo [ERROR] No se encontro el archivo del mundo:
-    echo %WORLD_PATH%
+    echo %FULL_WORLD%
     echo.
     pause
     exit /b 1
 )
 
-echo [1/2] Configurando entorno de Webots y bibliotecas Qt/MinGW...
+echo [1/2] Configurando entorno de Webots...
 set "PATH=%WEBOTS_HOME%\msys64\mingw64\bin;%WEBOTS_HOME%\lib\controller;%PATH%"
 
-echo [2/2] Abriendo Webots con la pista 'pista_montana_rusa.wbt'...
+echo [2/2] Abriendo pista en Webots (Ruta sin espacios: %SHORT_WORLD%)...
 cd /d "%WEBOTS_HOME%"
-start "" /d "%WEBOTS_HOME%" "%WEBOTS_HOME%\msys64\mingw64\bin\webotsw.exe" "%WORLD_PATH%"
+start "" /d "%WEBOTS_HOME%" "%WEBOTS_HOME%\msys64\mingw64\bin\webotsw.exe" "%SHORT_WORLD%"
 
 echo.
 echo ===================================================================
-echo   [OK] Webots ha sido lanzado.
+echo   [OK] Webots ha sido lanzado con la pista de laboratorio.
 echo ===================================================================
 echo.
 echo Instrucciones:
-echo 1. Espera a que Webots termine de cargar el mundo 3D en pantalla.
-echo 2. Presiona el boton Play en la barra superior de Webots para iniciar.
-echo 3. Observaras la maleta, el carrito y el HUD de fisica en tiempo real.
-echo.
-echo Si prefieres abrirlo manualmente desde Webots:
-echo Menu: Archivo -> Abrir Mundo -> Selecciona 'worlds\pista_montana_rusa.wbt'
+echo 1. Observa como Webots abre directamente 'pista_montana_rusa.wbt'.
+echo 2. Presiona el boton Play en la barra superior para iniciar el recorrido.
+echo 3. Observaras la telemetria y HUD de fisica en vivo.
 echo.
 echo Presiona cualquier tecla para cerrar esta ventana auxiliar.
 pause >nul

@@ -1,993 +1,856 @@
 """
 Generador del Mundo Webots para la Pista tipo Montaña Rusa de Laboratorio.
-Cumple estrictamente con todas las especificaciones:
-- Rampa inicial: L=47cm, 30 grados, inicio a h=1.20m.
-- Maleta: 7.5 x 5 x 4 cm, masa 18g (con soporte de peso extra).
-- Estación de transferencia: 5cm debajo del final de la rampa 1.
-- Carrito: 17 x 9 x 4.5 cm, cavidad interior 14 x 6 cm, masa 200g.
-- Bajada 2: L=50cm, 45 grados.
-- Curva 1: 90 grados, radio 10cm, peralte 30 grados.
-- Subida: L=47cm, 30 grados.
-- Tramo plano cresta: L=10cm.
-- Bajada 3 y Curva 2: 180 grados, radio 18cm, descenso al suelo.
-- Tramo final de frenado: L=75cm sobre el suelo con alta fricción.
-- Supervisor en Python con telemetría HUD y cálculo de física.
+Secuencia exacta solicitada:
+1. Rampa 1 (Maleta desde 1.20m, 47cm, 30°) con lengüeta de acople directo.
+2. Estación de transferencia y acople con retención total de la maleta.
+3. Bajada 2 (50cm, 45°) con empalmes suaves.
+4. Curva 1 (90° peraltada hacia +Y).
+5. Subida (47cm, 30° hacia +Y) y Cresta.
+6. Bajada Recta desde la cresta hasta el suelo (h=0.02m).
+7. Curva de 180° plana en el suelo (peraltada con guardarraíles altos).
+8. Trayecto final recto de frenado en el suelo (L=75cm, mu=1.35).
 """
 
 import math
 import os
 
+def create_smooth_spine():
+    """
+    Construye la espina dorsal tridimensional continua (C1) de la pista del carrito.
+    """
+    slices = [] # lista de (P, T, L, U, is_brake)
+
+    def add_slice(P, T, L, U, is_brake=False):
+        slices.append((P, T, L, U, is_brake))
+
+    y_line = 0.20
+
+    # -------------------------------------------------------------
+    # 1. Estación de Transferencia (Horizontal, h = 0.915m)
+    # x: 0.46m a 0.62m (L = 0.16m)
+    # -------------------------------------------------------------
+    x_plat_start = 0.46
+    x_plat_end = 0.62
+    z_plat = 0.915
+    N_plat = 10
+    for i in range(N_plat + 1):
+        u = i / float(N_plat)
+        x = x_plat_start + u * (x_plat_end - x_plat_start)
+        P = [x, y_line, z_plat]
+        T = [1.0, 0.0, 0.0]
+        L = [0.0, 1.0, 0.0]
+        U = [0.0, 0.0, 1.0]
+        add_slice(P, T, L, U)
+
+    # -------------------------------------------------------------
+    # 2. Transición Convexa: De horizontal (0°) a bajada (-45°)
+    # Arco circular de radio R = 0.20m
+    # -------------------------------------------------------------
+    R_t1 = 0.20
+    N_t1 = 14
+    for i in range(1, N_t1 + 1):
+        alpha = (i / float(N_t1)) * math.radians(45)
+        x = x_plat_end + R_t1 * math.sin(alpha)
+        z = z_plat - R_t1 * (1.0 - math.cos(alpha))
+        ca, sa = math.cos(alpha), math.sin(alpha)
+        T = [ca, 0.0, -sa]
+        L = [0.0, 1.0, 0.0]
+        U = [sa, 0.0, ca]
+        add_slice([x, y_line, z], T, L, U)
+
+    x_bajada_start = x
+    z_bajada_start = z
+
+    # -------------------------------------------------------------
+    # 3. Bajada 2 Recta a 45°
+    # Longitud L = 0.335m
+    # -------------------------------------------------------------
+    L_bajada = 0.335
+    ca45 = math.cos(math.radians(45))
+    sa45 = math.sin(math.radians(45))
+    N_bajada = 18
+    for i in range(1, N_bajada + 1):
+        s = (i / float(N_bajada)) * L_bajada
+        x = x_bajada_start + s * ca45
+        z = z_bajada_start - s * sa45
+        T = [ca45, 0.0, -sa45]
+        L = [0.0, 1.0, 0.0]
+        U = [sa45, 0.0, ca45]
+        add_slice([x, y_line, z], T, L, U)
+
+    x_valle_start = x
+    z_valle_start = z
+
+    # -------------------------------------------------------------
+    # 4. Transición Cóncava de Valle: De -45° a horizontal (0°)
+    # Arco circular de radio R = 0.20m
+    # -------------------------------------------------------------
+    R_t2 = 0.20
+    N_t2 = 14
+    for i in range(1, N_t2 + 1):
+        alpha = math.radians(45) * (1.0 - i / float(N_t2))
+        x = x_valle_start + R_t2 * (math.sin(math.radians(45)) - math.sin(alpha))
+        z = z_valle_start - R_t2 * (math.cos(alpha) - math.cos(math.radians(45)))
+        ca, sa = math.cos(alpha), math.sin(alpha)
+        T = [ca, 0.0, -sa]
+        L = [0.0, 1.0, 0.0]
+        U = [sa, 0.0, ca]
+        add_slice([x, y_line, z], T, L, U)
+
+    x_c1_start = x
+    z_c1 = z # ~0.561m
+
+    # -------------------------------------------------------------
+    # 5. Curva 1: Giro suave de 90° hacia +Y con peralte
+    # Radio R = 0.18m
+    # -------------------------------------------------------------
+    R1 = 0.18
+    x_c1_center = x_c1_start
+    y_c1_center = y_line + R1
+    N_c1 = 24
+    peralte1_max = math.radians(18)
+    for i in range(1, N_c1 + 1):
+        phi = -math.pi/2.0 + (i / float(N_c1)) * (math.pi/2.0)
+        px = x_c1_center + R1 * math.cos(phi)
+        py = y_c1_center + R1 * math.sin(phi)
+        pz = z_c1
+
+        T = [-math.sin(phi), math.cos(phi), 0.0]
+        L_flat = [math.cos(phi), math.sin(phi), 0.0]
+        U_flat = [0.0, 0.0, 1.0]
+
+        bank = peralte1_max * math.sin((i / float(N_c1)) * math.pi)
+        cb, sb = math.cos(bank), math.sin(bank)
+        L = [L_flat[k]*cb + U_flat[k]*sb for k in range(3)]
+        U = [-L_flat[k]*sb + U_flat[k]*cb for k in range(3)]
+        add_slice([px, py, pz], T, L, U)
+
+    x_hill_start = px
+    y_hill_start = py
+    z_hill_start = pz
+
+    # -------------------------------------------------------------
+    # 6. Transición Cóncava hacia Subida: De horizontal (0°) a +30° en +Y
+    # Arco circular de radio R = 0.25m
+    # -------------------------------------------------------------
+    R_t3 = 0.25
+    N_t3 = 14
+    for i in range(1, N_t3 + 1):
+        beta = (i / float(N_t3)) * math.radians(30)
+        y = y_hill_start + R_t3 * math.sin(beta)
+        z = z_hill_start + R_t3 * (1.0 - math.cos(beta))
+        cb, sb = math.cos(beta), math.sin(beta)
+        T = [0.0, cb, sb]
+        L = [1.0, 0.0, 0.0]
+        U = [0.0, -sb, cb]
+        add_slice([x_hill_start, y, z], T, L, U)
+
+    y_sub_start = y
+    z_sub_start = z
+
+    # -------------------------------------------------------------
+    # 7. Subida Recta a +30° en +Y
+    # Longitud L = 0.336m
+    # -------------------------------------------------------------
+    L_sub = 0.336
+    cb30 = math.cos(math.radians(30))
+    sb30 = math.sin(math.radians(30))
+    N_sub = 18
+    for i in range(1, N_sub + 1):
+        s = (i / float(N_sub)) * L_sub
+        y = y_sub_start + s * cb30
+        z = z_sub_start + s * sb30
+        T = [0.0, cb30, sb30]
+        L = [1.0, 0.0, 0.0]
+        U = [0.0, -sb30, cb30]
+        add_slice([x_hill_start, y, z], T, L, U)
+
+    y_crown_start = y
+    z_crown_start = z
+
+    # -------------------------------------------------------------
+    # 8. Transición Convexa de Cresta: De +30° a horizontal (0°) en +Y
+    # Arco circular de radio R = 0.25m
+    # -------------------------------------------------------------
+    R_t4 = 0.25
+    N_t4 = 14
+    for i in range(1, N_t4 + 1):
+        beta = math.radians(30) * (1.0 - i / float(N_t4))
+        y = y_crown_start + R_t4 * (math.sin(math.radians(30)) - math.sin(beta))
+        z = z_crown_start + R_t4 * (math.cos(beta) - math.cos(math.radians(30)))
+        cb, sb = math.cos(beta), math.sin(beta)
+        T = [0.0, cb, sb]
+        L = [1.0, 0.0, 0.0]
+        U = [0.0, -sb, cb]
+        add_slice([x_hill_start, y, z], T, L, U)
+
+    y_crest_start = y
+    z_crest = z # ~0.796m
+
+    # -------------------------------------------------------------
+    # 9. Cresta Plana Horizontal
+    # Longitud L = 0.06m en +Y
+    # -------------------------------------------------------------
+    L_crest = 0.06
+    N_crest = 6
+    for i in range(1, N_crest + 1):
+        y = y_crest_start + (i / float(N_crest)) * L_crest
+        P = [x_hill_start, y, z_crest]
+        T = [0.0, 1.0, 0.0]
+        L = [1.0, 0.0, 0.0]
+        U = [0.0, 0.0, 1.0]
+        add_slice(P, T, L, U)
+
+    y_desc_crest_end = y
+
+    # -------------------------------------------------------------
+    # 10. NUEVA SECCION: BAJADA RECTA DESDE LA CRESTA HASTA EL SUELO (z=0.020m)
+    # Pendiente uniforme a 45° con empalmes parabólicos en cresta y valle
+    # Cero aceleración centrípeta durante todo el descenso (a_c = 0)
+    # -------------------------------------------------------------
+    z_ground = 0.020
+    R_desc = 0.25
+    theta_desc = math.radians(45)
+
+    # a) Transición Convexa Cresta -> Bajada (0° a -45° en +Y)
+    N_desc_t1 = 14
+    for i in range(1, N_desc_t1 + 1):
+        gamma = (i / float(N_desc_t1)) * theta_desc
+        y = y_desc_crest_end + R_desc * math.sin(gamma)
+        z = z_crest - R_desc * (1.0 - math.cos(gamma))
+        cg, sg = math.cos(gamma), math.sin(gamma)
+        T = [0.0, cg, -sg]
+        L = [1.0, 0.0, 0.0]
+        U = [0.0, sg, cg]
+        add_slice([x_hill_start, y, z], T, L, U)
+
+    y_desc_straight_start = y
+    z_desc_straight_start = z
+
+    # b) Tramo Recto de Bajada a -45°
+    dz_fillet = R_desc * (1.0 - math.cos(theta_desc))
+    total_drop = z_crest - z_ground
+    dz_straight = total_drop - 2 * dz_fillet
+    L_straight = dz_straight / math.sin(theta_desc)
+    N_desc_str = 24
+    for i in range(1, N_desc_str + 1):
+        s = (i / float(N_desc_str)) * L_straight
+        y = y_desc_straight_start + s * math.cos(theta_desc)
+        z = z_desc_straight_start - s * math.sin(theta_desc)
+        T = [0.0, math.cos(theta_desc), -math.sin(theta_desc)]
+        L = [1.0, 0.0, 0.0]
+        U = [0.0, math.sin(theta_desc), math.cos(theta_desc)]
+        add_slice([x_hill_start, y, z], T, L, U)
+
+    y_desc_valle_start = y
+    z_desc_valle_start = z
+
+    # c) Transición Cóncava de Valle al Suelo (-45° a 0° horizontal)
+    N_desc_t2 = 14
+    for i in range(1, N_desc_t2 + 1):
+        gamma = theta_desc * (1.0 - i / float(N_desc_t2))
+        y = y_desc_valle_start + R_desc * (math.sin(theta_desc) - math.sin(gamma))
+        z = z_desc_valle_start - R_desc * (math.cos(gamma) - math.cos(theta_desc))
+        cg, sg = math.cos(gamma), math.sin(gamma)
+        T = [0.0, cg, -sg]
+        L = [1.0, 0.0, 0.0]
+        U = [0.0, sg, cg]
+        add_slice([x_hill_start, y, z], T, L, U)
+
+    y_ground_start = y
+    z_at_ground = z # 0.020m exactamente
+
+    # -------------------------------------------------------------
+    # 11. NUEVA SECCION: CURVA PLANA DE 180° EN EL SUELO (z=0.020m)
+    # Gira 180° en el plano horizontal (R = 0.25m), peralte de 22°
+    # Ya en el suelo, con estabilidad gravitacional total
+    # -------------------------------------------------------------
+    R2 = 0.25
+    x_c2_center = x_hill_start - R2
+    y_c2_center = y_ground_start
+    N_c2 = 36
+    peralte2_max = math.radians(22)
+    for i in range(1, N_c2 + 1):
+        psi = (i / float(N_c2)) * math.pi
+        px = x_c2_center + R2 * math.cos(psi)
+        py = y_c2_center + R2 * math.sin(psi)
+        pz = z_ground # completamente plano en el suelo
+
+        # Tangente en el plano XY
+        T = [-math.sin(psi), math.cos(psi), 0.0]
+        L_flat = [math.cos(psi), math.sin(psi), 0.0]
+        U_flat = [0.0, 0.0, 1.0]
+
+        # Peralte interior para compensar la fuerza centrifuga
+        bank = peralte2_max * math.sin(psi)
+        cb, sb = math.cos(bank), math.sin(bank)
+        L = [L_flat[k]*cb + U_flat[k]*sb for k in range(3)]
+        U = [-L_flat[k]*sb + U_flat[k]*cb for k in range(3)]
+        add_slice([px, py, pz], T, L, U)
+
+    x_brake_start = px
+    y_brake_start = py
+
+    # -------------------------------------------------------------
+    # 12. TRAYECTO FINAL DE FRENADO (L=75cm en dirección -Y)
+    # Sobre el suelo, horizontal, alta friccion mu=1.35
+    # -------------------------------------------------------------
+    L_brake = 0.75
+    N_brake = 25
+    for i in range(1, N_brake + 1):
+        y = y_brake_start - (i / float(N_brake)) * L_brake
+        P = [x_brake_start, y, z_ground]
+        T = [0.0, -1.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
+        U = [0.0, 0.0, 1.0]
+        add_slice(P, T, L, U, is_brake=True)
+
+    return slices
+
+def generate_circuit_mesh_vrml(slices, W_bed=0.11, H_guard=0.055, T_floor=0.010):
+    """
+    Convierte la secuencia de slices en un único sólido cerrado U-channel (IndexedFaceSet)
+    con guardarraíles elevados a 5.5cm para máxima retención del carrito.
+    """
+    points = []
+    coord_indices = []
+
+    for idx, (P, T, L, U, is_brake) in enumerate(slices):
+        p0 = [P[i] - (W_bed/2.0)*L[i] + H_guard*U[i] for i in range(3)]
+        p1 = [P[i] - (W_bed/2.0)*L[i] for i in range(3)]
+        p2 = [P[i] + (W_bed/2.0)*L[i] for i in range(3)]
+        p3 = [P[i] + (W_bed/2.0)*L[i] + H_guard*U[i] for i in range(3)]
+        p4 = [P[i] + (W_bed/2.0)*L[i] - T_floor*U[i] for i in range(3)]
+        p5 = [P[i] - (W_bed/2.0)*L[i] - T_floor*U[i] for i in range(3)]
+        points.extend([p0, p1, p2, p3, p4, p5])
+
+    num_quads = len(slices) - 1
+    for k in range(num_quads):
+        b0 = k * 6
+        b1 = (k + 1) * 6
+        # Lecho superior
+        coord_indices.append(f"{b0 + 1}, {b1 + 1}, {b1 + 2}, {b0 + 2}, -1")
+        # Guardarraíl izquierdo cara interior
+        coord_indices.append(f"{b1 + 1}, {b0 + 1}, {b0 + 0}, {b1 + 0}, -1")
+        # Guardarraíl derecho cara interior
+        coord_indices.append(f"{b0 + 2}, {b1 + 2}, {b1 + 3}, {b0 + 3}, -1")
+        # Fondo inferior del lecho
+        coord_indices.append(f"{b0 + 5}, {b0 + 4}, {b1 + 4}, {b1 + 5}, -1")
+        # Guardarraíl izquierdo cara exterior
+        coord_indices.append(f"{b0 + 0}, {b0 + 5}, {b1 + 5}, {b1 + 0}, -1")
+        # Guardarraíl derecho cara exterior
+        coord_indices.append(f"{b0 + 4}, {b0 + 3}, {b1 + 3}, {b1 + 4}, -1")
+
+    pts_str = ", ".join([f"{p[0]:.5f} {p[1]:.5f} {p[2]:.5f}" for p in points])
+    idx_str = ", ".join(coord_indices)
+
+    last_p = slices[-1][0]
+
+    vrml = f'''DEF PISTA_CIRCUITO Solid {{
+  children [
+    Shape {{
+      appearance PBRAppearance {{
+        baseColor 0.14 0.42 0.78
+        roughness 0.25
+        metalness 0.35
+      }}
+      geometry DEF GEO_CIRCUITO IndexedFaceSet {{
+        coord Coordinate {{
+          point [ {pts_str} ]
+        }}
+        coordIndex [ {idx_str} ]
+        creaseAngle 0.6
+      }}
+    }}
+    # Tope trasero de seguridad en la estación
+    Transform {{
+      translation {slices[0][0][0] - 0.005:.4f} {slices[0][0][1]:.4f} {slices[0][0][2] + 0.020:.4f}
+      children [
+        Shape {{
+          appearance PBRAppearance {{
+            baseColor 0.95 0.55 0.12
+            roughness 0.3
+            metalness 0.3
+          }}
+          geometry Box {{ size 0.010 {W_bed} 0.040 }}
+        }}
+      ]
+    }}
+    # Tope terminal amortiguado al final de la zona de frenado
+    Transform {{
+      translation {last_p[0]:.4f} {last_p[1] - 0.010:.4f} {last_p[2] + 0.025:.4f}
+      children [
+        Shape {{
+          appearance PBRAppearance {{
+            baseColor 0.85 0.12 0.12
+            roughness 0.5
+          }}
+          geometry Box {{ size {W_bed} 0.020 0.050 }}
+        }}
+      ]
+    }}
+  ]
+  name "pista_circuito"
+  contactMaterial "TrackMaterial"
+  boundingObject Group {{
+    children [
+      USE GEO_CIRCUITO
+      Transform {{
+        translation {slices[0][0][0] - 0.005:.4f} {slices[0][0][1]:.4f} {slices[0][0][2] + 0.020:.4f}
+        children [ Box {{ size 0.010 {W_bed} 0.040 }} ]
+      }}
+      Transform {{
+        translation {last_p[0]:.4f} {last_p[1] - 0.010:.4f} {last_p[2] + 0.025:.4f}
+        children [ Box {{ size {W_bed} 0.020 0.050 }} ]
+      }}
+    ]
+  }}
+}}
+'''
+    return vrml
+
 def create_world():
     world_content = []
     world_content.append('#VRML_SIM R2023b utf8\n')
     world_content.append('''
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2023b/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+
 WorldInfo {
   info [
     "Simulacion de Fisica: Pista Montana Rusa con Carrito y Maleta",
     "Proyecto de Fisica Mecanica - Analisis de Energia, Momento y Frenado"
   ]
   title "Pista Montana Rusa - Laboratorio de Fisica"
-  ERP 0.6
-  basicTimeStep 4
-  coordinateSystem "ENU"
+  basicTimeStep 16
   contactProperties [
     ContactProperties {
-      material1 "CartWheelMaterial"
+      material1 "SuitcaseMaterial"
       material2 "TrackMaterial"
-      coulombFriction [ 0.005 ]
-    }
-    ContactProperties {
-      material1 "CartWheelMaterial"
-      material2 "BrakingTrackMaterial"
-      coulombFriction [ 1.35 ]
+      coulombFriction [ 0.02 ]
+      bounce 0.02
     }
     ContactProperties {
       material1 "SuitcaseMaterial"
-      material2 "RampMaterial"
-      coulombFriction [ 0.02 ]
+      material2 "CartMaterial"
+      coulombFriction [ 0.95 ]
+      bounce 0.01
     }
     ContactProperties {
       material1 "SuitcaseMaterial"
       material2 "CartInteriorMaterial"
-      coulombFriction [ 0.70 ]
+      coulombFriction [ 1.20 ]
+      bounce 0.005
+    }
+    ContactProperties {
+      material1 "SuitcaseMaterial"
+      material2 "SuitcaseMaterial"
+      coulombFriction [ 0.02 ]
+    }
+    ContactProperties {
+      material1 "SuitcaseMaterial"
+      material2 "default"
+      coulombFriction [ 0.02 ]
+    }
+    ContactProperties {
+      material1 "CartMaterial"
+      material2 "TrackMaterial"
+      coulombFriction [ 0.005 ]
       bounce 0.02
     }
     ContactProperties {
-      material1 "CartBodyMaterial"
-      material2 "TrackMaterial"
-      coulombFriction [ 0.01 ]
+      material1 "CartMaterial"
+      material2 "BrakingMaterial"
+      coulombFriction [ 1.35 ]
+      bounce 0.01
+    }
+    ContactProperties {
+      material1 "CartMaterial"
+      material2 "CartMaterial"
+      coulombFriction [ 0.005 ]
+    }
+    ContactProperties {
+      material1 "CartMaterial"
+      material2 "default"
+      coulombFriction [ 0.005 ]
+    }
+    ContactProperties {
+      material1 "default"
+      material2 "default"
+      coulombFriction [ 0.5 ]
     }
   ]
 }
 
 Viewpoint {
-  orientation 0.280985 0.351231 0.893132 4.35
-  position 2.50 -1.40 2.20
-  near 0.05
+  orientation -0.320 0.880 0.350 1.250
+  position 2.50 -1.80 2.00
 }
 
-Background {
-  skyColor [
-    0.15 0.18 0.25
-  ]
+TexturedBackground {
 }
 
-DirectionalLight {
-  ambientIntensity 0.4
-  direction -0.4 0.3 -0.8
-  intensity 1.4
-  castShadows TRUE
+TexturedBackgroundLight {
 }
 
-# Suelo de laboratorio base (plataforma de 2.5m x 2.5m)
+# Suelo y mesa de laboratorio base amplia (plataforma de 2.8m x 2.8m)
 Solid {
-  translation 0.65 0.45 -0.01
+  translation 0.80 0.95 -0.015
   children [
     Shape {
       appearance PBRAppearance {
         baseColor 0.22 0.24 0.28
-        roughness 0.4
-        metalness 0.1
+        roughness 0.35
+        metalness 0.2
       }
       geometry Box {
-        size 2.5 2.5 0.02
+        size 2.8 2.8 0.03
       }
     }
   ]
   name "suelo_laboratorio"
   boundingObject Box {
-    size 2.5 2.5 0.02
+    size 2.8 2.8 0.03
   }
 }
 ''')
 
-    # Geometria exacta de la pista
-    # Ancho del lecho: 0.11 m
-    # Altura guardarrail: 0.035 m
-    # Espesor lecho: 0.01 m
-    
-    # 1. Rampa 1: Maleta
-    # Start: (0.10, 0.20, 1.20)
-    # L = 0.47m, theta = -30 deg en X
+    W_bed = 0.11
+    H_guard = 0.055 # Guardarraíles elevados a 5.5cm para evitar cualquier descarrilamiento
+    T_floor = 0.010
+    T_guard = 0.006
+    z_plat = 0.915
+
+    # ========================================================
+    # 1. RAMPA INICIAL DE LA MALETA (L=47cm, 30°)
+    # Con lengüeta de guiado suave que entra directamente en la cavidad del carro
+    # ========================================================
     L1 = 0.47
     theta1 = math.radians(30)
-    dx1 = L1 * math.cos(theta1)
-    dz1 = L1 * math.sin(theta1)
-    x1_start = 0.10
+    x1_start = 0.08
     y1_start = 0.20
     z1_start = 1.20
+
+    dx1 = L1 * math.cos(theta1)
+    dz1 = L1 * math.sin(theta1)
     x1_end = x1_start + dx1
-    y1_end = y1_start
     z1_end = z1_start - dz1
-    
-    # Centro de la rampa 1
+
     cx1 = (x1_start + x1_end) / 2.0
     cy1 = y1_start
     cz1 = (z1_start + z1_end) / 2.0
-    
-    # Rotacion de rampa 1: rotada alrededor de eje Y por +30 grados (baja en +X)
     rot_rampa1 = f"0 1 0 {theta1:.6f}"
-    
+
+    # Lengüeta curvada de transición
+    chute_points = []
+    chute_indices = []
+    N_chute = 10
+    R_chute = 0.18
+    for i in range(N_chute + 1):
+        ang = theta1 * (1.0 - i / float(N_chute))
+        dx_c = R_chute * (math.sin(theta1) - math.sin(ang))
+        dz_c = R_chute * (math.cos(ang) - math.cos(theta1))
+        px = x1_end + dx_c
+        py = y1_start
+        pz = z1_end - dz_c
+
+        ca = math.cos(ang)
+        chute_points.append(f"{px:.5f} {py - W_bed/2.0:.5f} {pz:.5f}")
+        chute_points.append(f"{px:.5f} {py + W_bed/2.0:.5f} {pz:.5f}")
+        chute_points.append(f"{px:.5f} {py - W_bed/2.0:.5f} {pz + H_guard*ca:.5f}")
+        chute_points.append(f"{px:.5f} {py + W_bed/2.0:.5f} {pz + H_guard*ca:.5f}")
+
+    for i in range(N_chute):
+        b0 = i * 4
+        b1 = (i + 1) * 4
+        chute_indices.append(f"{b0 + 0}, {b1 + 0}, {b1 + 1}, {b0 + 1}, -1")
+        chute_indices.append(f"{b0 + 0}, {b0 + 2}, {b1 + 2}, {b1 + 0}, -1")
+        chute_indices.append(f"{b0 + 1}, {b1 + 1}, {b1 + 3}, {b0 + 3}, -1")
+
+    chute_pts_str = ", ".join(chute_points)
+    chute_idx_str = ", ".join(chute_indices)
+
     world_content.append(f'''
 # ========================================================
-# SECCION 1: RAMPA INICIAL DE LA MALETA (L=47cm, 30 deg)
+# SECCION 1: RAMPA INICIAL DE LA MALETA (L=47cm, 30 deg + Lengueta Curva de Guiado)
 # ========================================================
 DEF RAMPA_1 Solid {{
-  translation {cx1:.5f} {cy1:.5f} {cz1:.5f}
-  rotation {rot_rampa1}
   children [
-    # Lecho de la rampa
+    Transform {{
+      translation {cx1:.5f} {cy1:.5f} {cz1:.5f}
+      rotation {rot_rampa1}
+      children [
+        Shape {{
+          appearance DEF APP_RAMP1 PBRAppearance {{
+            baseColor 0.88 0.24 0.18
+            roughness 0.2
+            metalness 0.25
+          }}
+          geometry Box {{ size {L1:.4f} {W_bed} {T_floor} }}
+        }}
+        Transform {{
+          translation 0 {(W_bed/2.0 + T_guard/2.0):.4f} {(H_guard/2.0):.4f}
+          children [
+            Shape {{
+              appearance DEF APP_GUARD PBRAppearance {{
+                baseColor 0.92 0.94 0.98
+                transparency 0.25
+                roughness 0.1
+                metalness 0.4
+              }}
+              geometry Box {{ size {L1:.4f} {T_guard} {H_guard} }}
+            }}
+          ]
+        }}
+        Transform {{
+          translation 0 {- (W_bed/2.0 + T_guard/2.0):.4f} {(H_guard/2.0):.4f}
+          children [
+            Shape {{
+              appearance USE APP_GUARD
+              geometry Box {{ size {L1:.4f} {T_guard} {H_guard} }}
+            }}
+          ]
+        }}
+      ]
+    }}
     Shape {{
-      appearance PBRAppearance {{
-        baseColor 0.85 0.20 0.20
-        roughness 0.15
-        metalness 0.2
+      appearance USE APP_RAMP1
+      geometry DEF GEO_CHUTE IndexedFaceSet {{
+        coord Coordinate {{
+          point [ {chute_pts_str} ]
+        }}
+        coordIndex [ {chute_idx_str} ]
+        creaseAngle 0.5
       }}
-      geometry DEF BOX_LECHO_R1 Box {{
-        size {L1:.4f} 0.10 0.01
-      }}
-    }}
-    # Guardarrail Izquierdo
-    Transform {{
-      translation 0 0.052 0.02
-      children [
-        Shape {{
-          appearance DEF APP_GUARD PBRAppearance {{
-            baseColor 0.9 0.9 0.95
-            transparency 0.35
-            roughness 0.1
-            metalness 0.3
-          }}
-          geometry DEF BOX_GUARD_R1 Box {{
-            size {L1:.4f} 0.005 0.035
-          }}
-        }}
-      ]
-    }}
-    # Guardarrail Derecho
-    Transform {{
-      translation 0 -0.052 0.02
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry USE BOX_GUARD_R1
-        }}
-      ]
-    }}
-    # Soporte vertical inicio (h=1.20m)
-    Transform {{
-      translation -{L1/2:.4f} 0 -{cz1/2:.4f}
-      rotation 0 1 0 -{theta1:.6f}
-      children [
-        Shape {{
-          appearance PBRAppearance {{
-            baseColor 0.4 0.45 0.5
-            metalness 0.8
-            roughness 0.3
-          }}
-          geometry Cylinder {{
-            height {z1_start:.4f}
-            radius 0.02
-          }}
-        }}
-      ]
     }}
   ]
   name "rampa_1"
-  contactMaterial "RampMaterial"
+  contactMaterial "TrackMaterial"
   boundingObject Group {{
     children [
-      USE BOX_LECHO_R1
       Transform {{
-        translation 0 0.052 0.02
-        children [ USE BOX_GUARD_R1 ]
+        translation {cx1:.5f} {cy1:.5f} {cz1:.5f}
+        rotation {rot_rampa1}
+        children [
+          Box {{ size {L1:.4f} {W_bed} {T_floor} }}
+          Transform {{
+            translation 0 {(W_bed/2.0 + T_guard/2.0):.4f} {(H_guard/2.0):.4f}
+            children [ Box {{ size {L1:.4f} {T_guard} {H_guard} }} ]
+          }}
+          Transform {{
+            translation 0 {- (W_bed/2.0 + T_guard/2.0):.4f} {(H_guard/2.0):.4f}
+            children [ Box {{ size {L1:.4f} {T_guard} {H_guard} }} ]
+          }}
+        ]
       }}
-      Transform {{
-        translation 0 -0.052 0.02
-        children [ USE BOX_GUARD_R1 ]
-      }}
+      USE GEO_CHUTE
     ]
   }}
 }}
 ''')
 
-    # 2. ESTACION DE TRANSFERENCIA
-    # Ubicada 5cm debajo del final de la rampa 1:
-    # z_transf = z1_end - 0.05 = 0.965 - 0.05 = 0.915m
-    # Largo de la plataforma = 0.24m (de x=0.507 a x=0.747)
-    z_transf = z1_end - 0.05
-    L_transf = 0.24
-    cx_transf = x1_end + L_transf / 2.0
-    cy_transf = y1_start
-    cz_transf = z_transf
-    
+    # ========================================================
+    # 2. CIRCUITO COMPLETO CON LA NUEVA SECUENCIA:
+    # Transfer -> Bajada 2 -> Curva 1 -> Subida -> Cresta ->
+    # BAJADA RECTA AL SUELO -> CURVA 180° EN SUELO -> TRAYECTO FINAL DE FRENADO
+    # ========================================================
+    slices = create_smooth_spine()
+    vrml_circuito = generate_circuit_mesh_vrml(slices, W_bed=W_bed, H_guard=H_guard, T_floor=T_floor)
     world_content.append(f'''
 # ========================================================
-# SECCION 2: ESTACION DE TRANSFERENCIA (Caida 5cm)
+# PISTA PRINCIPAL DEL CARRITO: CIRCUITO SUAVE C1 CON SECUENCIA EXACTA
 # ========================================================
-DEF ESTACION_TRANSFERENCIA Solid {{
-  translation {cx_transf:.5f} {cy_transf:.5f} {cz_transf:.5f}
-  children [
-    # Lecho horizontal
-    Shape {{
-      appearance PBRAppearance {{
-        baseColor 0.15 0.45 0.85
-        roughness 0.2
-        metalness 0.3
-      }}
-      geometry DEF BOX_LECHO_TRANSF Box {{
-        size {L_transf:.4f} 0.11 0.01
-      }}
-    }}
-    # Guardarrail Izquierdo
+{vrml_circuito}
+''')
+
+    # ========================================================
+    # 3. ESTRUCTURA DE SOPORTE METALICA ANCLADA AL SUELO
+    # Columnas verticales de acero estructural en las uniones elevadas
+    # ========================================================
+    pillar_locs = [
+        (x1_start, y1_start, z1_start - T_floor/2.0),
+        (0.60, y1_start, z_plat - T_floor/2.0),
+        (slices[40][0][0], slices[40][0][1], slices[40][0][2] - T_floor/2.0),
+        (slices[64][0][0], slices[64][0][1], slices[64][0][2] - T_floor/2.0),
+        (slices[92][0][0], slices[92][0][1], slices[92][0][2] - T_floor/2.0),
+        # Soporte bajo el punto medio de la bajada recta hacia el suelo
+        (slices[115][0][0], slices[115][0][1], slices[115][0][2] - T_floor/2.0)
+    ]
+
+    pillar_children = []
+    for idx, (px, py, pz_top) in enumerate(pillar_locs):
+        h_pillar = max(0.04, pz_top)
+        cz_pillar = h_pillar / 2.0
+        pillar_children.append(f'''
+    # Columna soporte {idx+1}
     Transform {{
-      translation 0 0.057 0.02
+      translation {px:.5f} {py:.5f} {cz_pillar:.5f}
       children [
         Shape {{
-          appearance USE APP_GUARD
-          geometry DEF BOX_GUARD_TRANSF Box {{
-            size {L_transf:.4f} 0.005 0.035
-          }}
-        }}
-      ]
-    }}
-    # Guardarrail Derecho
-    Transform {{
-      translation 0 -0.057 0.02
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry USE BOX_GUARD_TRANSF
-        }}
-      ]
-    }}
-    # Tope posterior para el carrito (evita que retroceda)
-    Transform {{
-      translation -{L_transf/2 - 0.005:.4f} 0 0.025
-      children [
-        Shape {{
-          appearance PBRAppearance {{
-            baseColor 0.95 0.6 0.1
-            roughness 0.3
-          }}
-          geometry Box {{
-            size 0.01 0.11 0.04
-          }}
-        }}
-      ]
-    }}
-    # Soporte vertical de la estacion
-    Transform {{
-      translation 0 0 -{cz_transf/2:.4f}
-      children [
-        Shape {{
-          appearance PBRAppearance {{
-            baseColor 0.4 0.45 0.5
-            metalness 0.8
-            roughness 0.3
+          appearance DEF APP_STEEL PBRAppearance {{
+            baseColor 0.70 0.73 0.78
+            metalness 0.90
+            roughness 0.20
           }}
           geometry Cylinder {{
-            height {cz_transf:.4f}
-            radius 0.02
+            height {h_pillar:.4f}
+            radius 0.016
           }}
         }}
       ]
     }}
-  ]
-  name "estacion_transferencia"
-  contactMaterial "TrackMaterial"
-  boundingObject Group {{
-    children [
-      USE BOX_LECHO_TRANSF
-      Transform {{
-        translation 0 0.057 0.02
-        children [ USE BOX_GUARD_TRANSF ]
-      }}
-      Transform {{
-        translation 0 -0.057 0.02
-        children [ USE BOX_GUARD_TRANSF ]
-      }}
-      Transform {{
-        translation -{L_transf/2 - 0.005:.4f} 0 0.025
-        children [
-          Box {{ size 0.01 0.11 0.04 }}
-        ]
-      }}
-    ]
-  }}
-}}
-''')
-
-    # 3. BAJADA 2: L=50cm, 45 grados hacia abajo
-    L2 = 0.50
-    theta2 = math.radians(45)
-    dx2 = L2 * math.cos(theta2)
-    dz2 = L2 * math.sin(theta2)
-    x2_start = x1_end + L_transf
-    y2_start = y1_start
-    z2_start = z_transf
-    x2_end = x2_start + dx2
-    y2_end = y2_start
-    z2_end = z2_start - dz2
-    
-    cx2 = (x2_start + x2_end) / 2.0
-    cy2 = y2_start
-    cz2 = (z2_start + z2_end) / 2.0
-    rot_bajada2 = f"0 1 0 {theta2:.6f}"
-    
-    world_content.append(f'''
-# ========================================================
-# SECCION 3: BAJADA 2 (L=50cm, 45 deg)
-# ========================================================
-DEF BAJADA_2 Solid {{
-  translation {cx2:.5f} {cy2:.5f} {cz2:.5f}
-  rotation {rot_bajada2}
-  children [
-    Shape {{
-      appearance PBRAppearance {{
-        baseColor 0.15 0.45 0.85
-        roughness 0.2
-        metalness 0.3
-      }}
-      geometry DEF BOX_LECHO_B2 Box {{
-        size {L2:.4f} 0.11 0.01
-      }}
-    }}
+    # Brida de anclaje al suelo de soporte {idx+1}
     Transform {{
-      translation 0 0.057 0.022
+      translation {px:.5f} {py:.5f} 0.005
       children [
         Shape {{
-          appearance USE APP_GUARD
-          geometry DEF BOX_GUARD_B2 Box {{
-            size {L2:.4f} 0.005 0.04
-          }}
-        }}
-      ]
-    }}
-    Transform {{
-      translation 0 -0.057 0.022
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry DEF BOX_GUARD_B2
-        }}
-      ]
-    }}
-  ]
-  name "bajada_2"
-  contactMaterial "TrackMaterial"
-  boundingObject Group {{
-    children [
-      USE BOX_LECHO_B2
-      Transform {{
-        translation 0 0.057 0.022
-        children [ USE BOX_GUARD_B2 ]
-      }}
-      Transform {{
-        translation 0 -0.057 0.022
-        children [ USE BOX_GUARD_B2 ]
-      }}
-    ]
-  }}
-}}
-''')
-
-    # 4. CURVA PERALTADA 1 (90 deg, R=10cm, peralte=30 deg)
-    # Gira de direccion +X a +Y.
-    # Centro de giro: (x2_end, y2_end + R1) = (x2_end, y2_start + 0.10)
-    R1 = 0.10
-    x_c1 = x2_end
-    y_c1 = y2_start + R1
-    z_c1 = z2_end
-    num_seg_c1 = 12
-    peralte_rad = math.radians(30)
-    
-    world_content.append(f'''
-# ========================================================
-# SECCION 4: CURVA PERALTADA 1 (90 deg, R=10cm, Peralte 30 deg)
-# ========================================================
-DEF CURVA_1 Solid {{
-  children [
-''')
-    # Generar segmentos discretos de la curva 1
-    phi_start = -math.pi / 2.0
-    phi_end = 0.0
-    d_phi = (phi_end - phi_start) / num_seg_c1
-    arc_seg_len = R1 * d_phi * 1.05
-    
-    curva1_bounds = []
-    for i in range(num_seg_c1):
-        phi_mid = phi_start + (i + 0.5) * d_phi
-        px = x_c1 + R1 * math.cos(phi_mid)
-        py = y_c1 + R1 * math.sin(phi_mid)
-        pz = z_c1
-        tangent_angle = phi_mid + math.pi / 2.0
-        
-        cos_t = math.cos(tangent_angle)
-        sin_t = math.sin(tangent_angle)
-        
-        cp = math.cos(peralte_rad)
-        sp = math.sin(peralte_rad)
-        
-        tr = cos_t + cos_t * cp + cp
-        angle = math.acos(max(-1.0, min(1.0, (tr - 1.0) / 2.0)))
-        if math.isclose(angle, 0.0, abs_tol=1e-5):
-            axis_x, axis_y, axis_z = 0, 0, 1
-        else:
-            denom = 2.0 * math.sin(angle)
-            axis_x = (sp - (-cos_t * sp)) / denom
-            axis_y = (sin_t * sp - 0) / denom
-            axis_z = (sin_t - (-sin_t * cp)) / denom
-            norm_a = math.sqrt(axis_x**2 + axis_y**2 + axis_z**2)
-            axis_x /= norm_a
-            axis_y /= norm_a
-            axis_z /= norm_a
-            
-        world_content.append(f'''    Transform {{
-      translation {px:.5f} {py:.5f} {pz:.5f}
-      rotation {axis_x:.5f} {axis_y:.5f} {axis_z:.5f} {angle:.5f}
-      children [
-        Shape {{
-          appearance PBRAppearance {{
-            baseColor 0.15 0.45 0.85
-            roughness 0.2
-            metalness 0.3
-          }}
-          geometry DEF BOX_C1_{i} Box {{
-            size {arc_seg_len:.4f} 0.11 0.01
-          }}
-        }}
-        Transform {{
-          translation 0 0.057 0.025
-          children [
-            Shape {{
-              appearance USE APP_GUARD
-              geometry DEF BOX_G1_{i} Box {{
-                size {arc_seg_len:.4f} 0.005 0.045
-              }}
-            }}
-          ]
-        }}
-        Transform {{
-          translation 0 -0.057 0.025
-          children [
-            Shape {{
-              appearance USE APP_GUARD
-              geometry USE BOX_G1_{i}
-            }}
-          ]
-        }}
-      ]
-    }}
-''')
-        curva1_bounds.append((px, py, pz, axis_x, axis_y, axis_z, angle, f"BOX_C1_{i}", f"BOX_G1_{i}"))
-
-    world_content.append(f'''  ]
-  name "curva_1"
-  contactMaterial "TrackMaterial"
-  boundingObject Group {{
-    children [
-''')
-    for px, py, pz, ax, ay, az, ang, b_lecho, b_guard in curva1_bounds:
-        world_content.append(f'''      Transform {{
-        translation {px:.5f} {py:.5f} {pz:.5f}
-        rotation {ax:.5f} {ay:.5f} {az:.5f} {ang:.5f}
-        children [
-          USE {b_lecho}
-          Transform {{
-            translation 0 0.057 0.025
-            children [ USE {b_guard} ]
-          }}
-          Transform {{
-            translation 0 -0.057 0.025
-            children [ USE {b_guard} ]
-          }}
-        ]
-      }}
-''')
-    world_content.append('''    ]
-  }
-}
-''')
-
-    # 5. SUBIDA: L=47cm, 30 deg hacia arriba en direccion +Y
-    L3 = 0.47
-    theta3 = math.radians(30)
-    dy3 = L3 * math.cos(theta3)
-    dz3 = L3 * math.sin(theta3)
-    x3_start = x_c1 + R1
-    y3_start = y_c1
-    z3_start = z_c1
-    x3_end = x3_start
-    y3_end = y3_start + dy3
-    z3_end = z3_start + dz3
-    
-    cx3 = x3_start
-    cy3 = (y3_start + y3_end) / 2.0
-    cz3 = (z3_start + z3_end) / 2.0
-    
-    rot_subida = f"1 0 0 -{theta3:.6f}"
-    
-    world_content.append(f'''
-# ========================================================
-# SECCION 5: SUBIDA (L=47cm, 30 deg hacia arriba en +Y)
-# ========================================================
-DEF SUBIDA Solid {{
-  translation {cx3:.5f} {cy3:.5f} {cz3:.5f}
-  rotation {rot_subida}
-  children [
-    Shape {{
-      appearance PBRAppearance {{
-        baseColor 0.15 0.45 0.85
-        roughness 0.2
-        metalness 0.3
-      }}
-      geometry DEF BOX_LECHO_S Box {{
-        size 0.11 {L3:.4f} 0.01
-      }}
-    }}
-    Transform {{
-      translation 0.057 0 0.022
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry DEF BOX_GUARD_S Box {{
-            size 0.005 {L3:.4f} 0.04
-          }}
-        }}
-      ]
-    }}
-    Transform {{
-      translation -0.057 0 0.022
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry USE BOX_GUARD_S
-        }}
-      ]
-    }}
-    # Soporte central subida
-    Transform {{
-      translation 0 0 -{cz3/2:.4f}
-      rotation 1 0 0 {theta3:.6f}
-      children [
-        Shape {{
-          appearance PBRAppearance {{
-            baseColor 0.4 0.45 0.5
-            metalness 0.8
-            roughness 0.3
-          }}
+          appearance USE APP_STEEL
           geometry Cylinder {{
-            height {cz3:.4f}
-            radius 0.02
+            height 0.010
+            radius 0.038
           }}
         }}
       ]
     }}
-  ]
-  name "subida"
-  contactMaterial "TrackMaterial"
-  boundingObject Group {{
-    children [
-      USE BOX_LECHO_S
-      Transform {{
-        translation 0.057 0 0.022
-        children [ USE BOX_GUARD_S ]
-      }}
-      Transform {{
-        translation -0.057 0 0.022
-        children [ USE BOX_GUARD_S ]
-      }}
-    ]
-  }}
-}}
-''')
-
-    # 6. TRAMO RECTO HORIZONTAL (Cresta) L=10cm
-    L4 = 0.10
-    x4_start = x3_end
-    y4_start = y3_end
-    z4_start = z3_end
-    x4_end = x4_start
-    y4_end = y4_start + L4
-    z4_end = z4_start
-    
-    cx4 = x4_start
-    cy4 = (y4_start + y4_end) / 2.0
-    cz4 = z4_start
-    
-    world_content.append(f'''
-# ========================================================
-# SECCION 6: CRESTA RECTA HORIZONTAL (L=10cm)
-# ========================================================
-DEF CRESTA Solid {{
-  translation {cx4:.5f} {cy4:.5f} {cz4:.5f}
-  children [
-    Shape {{
-      appearance PBRAppearance {{
-        baseColor 0.15 0.45 0.85
-        roughness 0.2
-        metalness 0.3
-      }}
-      geometry DEF BOX_LECHO_C Box {{
-        size 0.11 {L4:.4f} 0.01
-      }}
-    }}
+    # Soporte superior de fijacion a via {idx+1}
     Transform {{
-      translation 0.057 0 0.022
+      translation {px:.5f} {py:.5f} {h_pillar - 0.005:.4f}
       children [
         Shape {{
-          appearance USE APP_GUARD
-          geometry DEF BOX_GUARD_C Box {{
-            size 0.005 {L4:.4f} 0.04
-          }}
-        }}
-      ]
-    }}
-    Transform {{
-      translation -0.057 0 0.022
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry USE BOX_GUARD_C
-        }}
-      ]
-    }}
-  ]
-  name "cresta"
-  contactMaterial "TrackMaterial"
-  boundingObject Group {{
-    children [
-      USE BOX_LECHO_C
-      Transform {{
-        translation 0.057 0 0.022
-        children [ USE BOX_GUARD_C ]
-      }}
-      Transform {{
-        translation -0.057 0 0.022
-        children [ USE BOX_GUARD_C ]
-      }}
-    ]
-  }}
-}}
-''')
-
-    # 7. BAJADA 3 Y CURVA 2 (180 deg, R=18cm, descenso al suelo)
-    R2 = 0.18
-    num_seg_c2 = 24
-    x_c2 = x4_end - R2
-    y_c2 = y4_end
-    z_top = z4_end
-    z_bottom = 0.02
-    
-    world_content.append(f'''
-# ========================================================
-# SECCION 7: BAJADA Y CURVA 2 (180 deg, R=18cm, Hacia Suelo)
-# ========================================================
-DEF CURVA_2 Solid {{
-  children [
-''')
-    curva2_bounds = []
-    d_psi = math.pi / num_seg_c2
-    arc_seg2_len = R2 * d_psi * 1.05
-    
-    for j in range(num_seg_c2):
-        psi_mid = (j + 0.5) * d_psi
-        frac = (1.0 - math.cos(psi_mid)) / 2.0
-        pz = z_top - frac * (z_top - z_bottom)
-        
-        px = x_c2 + R2 * math.cos(psi_mid)
-        py = y_c2 + R2 * math.sin(psi_mid)
-        
-        tx = -R2 * math.sin(psi_mid)
-        ty = R2 * math.cos(psi_mid)
-        tz = -(z_top - z_bottom) * 0.5 * math.sin(psi_mid)
-        t_norm = math.sqrt(tx**2 + ty**2 + tz**2)
-        tx /= t_norm
-        ty /= t_norm
-        tz /= t_norm
-        
-        peralte2 = math.radians(20) * math.sin(psi_mid)
-        yaw = math.atan2(ty, tx)
-        pitch = -math.asin(tz)
-        
-        cyaw, syaw = math.cos(yaw), math.sin(yaw)
-        cpit, spit = math.cos(pitch), math.sin(pitch)
-        crol, srol = math.cos(peralte2), math.sin(peralte2)
-        
-        r00 = cyaw * cpit
-        r10 = syaw * cpit
-        r20 = -spit
-        
-        r01 = -syaw * crol + cyaw * spit * srol
-        r11 =  cyaw * crol + syaw * spit * srol
-        r21 =  cpit * srol
-        
-        r02 =  syaw * srol + cyaw * spit * crol
-        r12 = -cyaw * srol + syaw * spit * crol
-        r22 =  cpit * crol
-        
-        tr = r00 + r11 + r22
-        angle = math.acos(max(-1.0, min(1.0, (tr - 1.0) / 2.0)))
-        if math.isclose(angle, 0.0, abs_tol=1e-5):
-            ax, ay, az = 0, 0, 1
-        else:
-            denom = 2.0 * math.sin(angle)
-            ax = (r21 - r12) / denom
-            ay = (r02 - r20) / denom
-            az = (r10 - r01) / denom
-            anorm = math.sqrt(ax**2 + ay**2 + az**2)
-            ax /= anorm
-            ay /= anorm
-            az /= anorm
-
-        world_content.append(f'''    Transform {{
-      translation {px:.5f} {py:.5f} {pz:.5f}
-      rotation {ax:.5f} {ay:.5f} {az:.5f} {angle:.5f}
-      children [
-        Shape {{
-          appearance PBRAppearance {{
-            baseColor 0.15 0.45 0.85
-            roughness 0.2
-            metalness 0.3
-          }}
-          geometry DEF BOX_C2_{j} Box {{
-            size {arc_seg2_len:.4f} 0.11 0.01
-          }}
-        }}
-        Transform {{
-          translation 0 0.057 0.025
-          children [
-            Shape {{
-              appearance USE APP_GUARD
-              geometry DEF BOX_G2_{j} Box {{
-                size {arc_seg2_len:.4f} 0.005 0.045
-              }}
-            }}
-          ]
-        }}
-        Transform {{
-          translation 0 -0.057 0.025
-          children [
-            Shape {{
-              appearance USE APP_GUARD
-              geometry USE BOX_G2_{j}
-            }}
-          ]
-        }}
-      ]
-    }}
-''')
-        curva2_bounds.append((px, py, pz, ax, ay, az, angle, f"BOX_C2_{j}", f"BOX_G2_{j}"))
-
-    world_content.append(f'''  ]
-  name "curva_2"
-  contactMaterial "TrackMaterial"
-  boundingObject Group {{
-    children [
-''')
-    for px, py, pz, ax, ay, az, ang, b_lecho, b_guard in curva2_bounds:
-        world_content.append(f'''      Transform {{
-        translation {px:.5f} {py:.5f} {pz:.5f}
-        rotation {ax:.5f} {ay:.5f} {az:.5f} {ang:.5f}
-        children [
-          USE {b_lecho}
-          Transform {{
-            translation 0 0.057 0.025
-            children [ USE {b_guard} ]
-          }}
-          Transform {{
-            translation 0 -0.057 0.025
-            children [ USE {b_guard} ]
-          }}
-        ]
-      }}
-''')
-    world_content.append('''    ]
-  }
-}
-''')
-
-    # 8. TRAMO RECTO FINAL DE FRENADO (L=75cm sobre el suelo)
-    x_freno = x_c2 - R2
-    y_freno_start = y_c2
-    L_freno = 0.75
-    y_freno_end = y_freno_start - L_freno
-    z_freno = 0.02
-    
-    cy_freno = (y_freno_start + y_freno_end) / 2.0
-    
-    world_content.append(f'''
-# ========================================================
-# SECCION 8: TRAMO FINAL DE FRENADO (L=75cm, Suelo h=0)
-# ========================================================
-DEF ZONA_FRENADO Solid {{
-  translation {x_freno:.5f} {cy_freno:.5f} {z_freno:.5f}
-  children [
-    # Lecho con textura de alto rozamiento
-    Shape {{
-      appearance PBRAppearance {{
-        baseColor 0.90 0.75 0.15
-        roughness 0.9
-        metalness 0.05
-      }}
-      geometry DEF BOX_LECHO_FRENO Box {{
-        size 0.11 {L_freno:.4f} 0.01
-      }}
-    }}
-    # Guardarrail Izquierdo
-    Transform {{
-      translation 0.057 0 0.022
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry DEF BOX_GUARD_FRENO Box {{
-            size 0.005 {L_freno:.4f} 0.04
-          }}
-        }}
-      ]
-    }}
-    # Guardarrail Derecho
-    Transform {{
-      translation -0.057 0 0.022
-      children [
-        Shape {{
-          appearance USE APP_GUARD
-          geometry USE BOX_GUARD_FRENO
-        }}
-      ]
-    }}
-    # Tope terminal de seguridad al final de la pista
-    Transform {{
-      translation 0 -{L_freno/2 - 0.01:.4f} 0.03
-      children [
-        Shape {{
-          appearance PBRAppearance {{
-            baseColor 0.85 0.1 0.1
-            roughness 0.5
-          }}
+          appearance USE APP_STEEL
           geometry Box {{
-            size 0.11 0.02 0.05
+            size 0.070 0.120 0.010
           }}
         }}
       ]
-    }}
+    }}''')
+
+    all_pillars_vrml = "\n".join(pillar_children)
+    world_content.append(f'''
+# ========================================================
+# ESTRUCTURA DE SOPORTE METALICA ANCLADA AL SUELO
+# ========================================================
+Solid {{
+  children [
+{all_pillars_vrml}
   ]
-  name "zona_frenado"
-  contactMaterial "BrakingTrackMaterial"
-  boundingObject Group {{
-    children [
-      USE BOX_LECHO_FRENO
-      Transform {{
-        translation 0.057 0 0.022
-        children [ USE BOX_GUARD_FRENO ]
-      }}
-      Transform {{
-        translation -0.057 0 0.022
-        children [ USE BOX_GUARD_FRENO ]
-      }}
-      Transform {{
-        translation 0 -{L_freno/2 - 0.01:.4f} 0.03
-        children [
-          Box {{ size 0.11 0.02 0.05 }}
-        ]
-      }}
-    ]
-  }}
+  name "estructura_soporte"
 }}
 ''')
 
-    # CARRITO (9 ancho x 17 largo x 4.5 alto, cavidad 6x14 cm, masa 200g)
-    cart_init_x = cx_transf - 0.01
-    cart_init_y = cy_transf
-    cart_init_z = cz_transf + 0.028
-    
+    # ========================================================
+    # 4. CARRITO CON JAULA DE RETENCION ENVOLVENTE
+    # - Paredes de 4.0cm de alto con labios superiores de captura
+    #   que impiden que la maleta sea expulsada verticalmente
+    # - Suelo interior antideslizante con CartInteriorMaterial (mu=1.20)
+    # - Pared frontal alta acolchada
+    # - Entrada trasera abierta para que la maleta entre suavemente
+    # ========================================================
+    cart_init_x = 0.550
+    cart_init_y = y1_start
+    cart_init_z = z_plat + 0.0275
+
     world_content.append(f'''
 # ========================================================
-# CARRITO DE LABORATORIO (M=200g, 17x9x4.5cm, Cavidad 14x6cm)
+# CARRITO DE LABORATORIO (M=200g con Jaula de Retencion Envolvente)
 # ========================================================
 DEF CARRITO Solid {{
   translation {cart_init_x:.5f} {cart_init_y:.5f} {cart_init_z:.5f}
   children [
-    # Chasis principal del carrito con cavidad interior
+    # Chasis principal
     Shape {{
       appearance DEF APP_CAR_BODY PBRAppearance {{
-        baseColor 0.05 0.70 0.35
-        roughness 0.25
-        metalness 0.4
+        baseColor 0.08 0.72 0.38
+        roughness 0.20
+        metalness 0.40
       }}
-      geometry DEF BOX_CAR_BASE Box {{
-        size 0.17 0.09 0.01
-      }}
+      geometry Box {{ size 0.170 0.090 0.010 }}
     }}
-    # Pared frontal del receptaculo
+    # Pared frontal alta receptora del empuje (4.0cm alto, inclinada 5° hacia atras)
     Transform {{
-      translation 0.075 0 0.018
+      translation 0.075 0 0.025
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.02 0.09 0.026 }}
+          geometry Box {{ size 0.020 0.090 0.040 }}
         }}
       ]
     }}
-    # Pared trasera del receptaculo
+    # Pared trasera baja de entrada biselada (ras de suelo)
     Transform {{
-      translation -0.075 0 0.018
+      translation -0.075 0 0.007
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.02 0.09 0.026 }}
+          geometry Box {{ size 0.020 0.090 0.004 }}
         }}
       ]
     }}
-    # Pared lateral izquierda
+    # Pared lateral izquierda (4.0cm de alto)
     Transform {{
-      translation 0 0.0375 0.018
+      translation 0 0.040 0.025
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.14 0.015 0.026 }}
+          geometry Box {{ size 0.140 0.010 0.040 }}
         }}
       ]
     }}
-    # Pared lateral derecha
+    # Pared lateral derecha (4.0cm de alto)
     Transform {{
-      translation 0 -0.0375 0.018
+      translation 0 -0.040 0.025
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.14 0.015 0.026 }}
+          geometry Box {{ size 0.140 0.010 0.040 }}
         }}
       ]
     }}
-    # Fondo de la cavidad receptora (material de alta amortiguacion)
+    # Pestaña de retención superior izquierda (labio de encaste que evita que la maleta salte)
+    Transform {{
+      translation 0 0.032 0.043
+      children [
+        Shape {{
+          appearance USE APP_CAR_BODY
+          geometry Box {{ size 0.140 0.008 0.004 }}
+        }}
+      ]
+    }}
+    # Pestaña de retención superior derecha (labio de encaste que evita que la maleta salte)
+    Transform {{
+      translation 0 -0.032 0.043
+      children [
+        Shape {{
+          appearance USE APP_CAR_BODY
+          geometry Box {{ size 0.140 0.008 0.004 }}
+        }}
+      ]
+    }}
+    # Suelo interior acolchado de alto agarre (CartInteriorMaterial mu=1.20)
     Transform {{
       translation 0 0 0.006
       children [
         Shape {{
           appearance PBRAppearance {{
-            baseColor 0.15 0.15 0.18
-            roughness 0.8
+            baseColor 0.12 0.12 0.15
+            roughness 0.95
           }}
-          geometry Box {{ size 0.14 0.06 0.002 }}
+          geometry Box {{ size 0.140 0.068 0.002 }}
         }}
       ]
     }}
-    # 4 Ruedas de bajo rozamiento
+    # 4 Ruedas de bajisimo rozamiento
     Transform {{
       translation 0.055 0.046 -0.008
       rotation 1 0 0 1.5708
       children [
         Shape {{
           appearance DEF APP_WHEEL PBRAppearance {{
-            baseColor 0.1 0.1 0.1
-            roughness 0.3
+            baseColor 0.12 0.12 0.14
+            roughness 0.2
             metalness 0.8
           }}
-          geometry DEF CYL_WHEEL Cylinder {{
-            height 0.008
-            radius 0.014
-          }}
+          geometry Cylinder {{ height 0.008 radius 0.014 }}
         }}
       ]
     }}
@@ -997,7 +860,7 @@ DEF CARRITO Solid {{
       children [
         Shape {{
           appearance USE APP_WHEEL
-          geometry USE CYL_WHEEL
+          geometry Cylinder {{ height 0.008 radius 0.014 }}
         }}
       ]
     }}
@@ -1007,7 +870,7 @@ DEF CARRITO Solid {{
       children [
         Shape {{
           appearance USE APP_WHEEL
-          geometry USE CYL_WHEEL
+          geometry Cylinder {{ height 0.008 radius 0.014 }}
         }}
       ]
     }}
@@ -1017,74 +880,88 @@ DEF CARRITO Solid {{
       children [
         Shape {{
           appearance USE APP_WHEEL
-          geometry USE CYL_WHEEL
+          geometry Cylinder {{ height 0.008 radius 0.014 }}
         }}
       ]
     }}
   ]
   name "carrito"
-  contactMaterial "CartWheelMaterial"
+  contactMaterial "CartMaterial"
   boundingObject Group {{
     children [
-      USE BOX_CAR_BASE
+      Box {{ size 0.170 0.090 0.010 }}
       Transform {{
-        translation 0.075 0 0.018
-        children [ Box {{ size 0.02 0.09 0.026 }} ]
+        translation 0.075 0 0.025
+        children [ Box {{ size 0.020 0.090 0.040 }} ]
       }}
       Transform {{
-        translation -0.075 0 0.018
-        children [ Box {{ size 0.02 0.09 0.026 }} ]
+        translation -0.075 0 0.007
+        children [ Box {{ size 0.020 0.090 0.004 }} ]
       }}
       Transform {{
-        translation 0 0.0375 0.018
-        children [ Box {{ size 0.14 0.015 0.026 }} ]
+        translation 0 0.040 0.025
+        children [ Box {{ size 0.140 0.010 0.040 }} ]
       }}
       Transform {{
-        translation 0 -0.0375 0.018
-        children [ Box {{ size 0.14 0.015 0.026 }} ]
+        translation 0 -0.040 0.025
+        children [ Box {{ size 0.140 0.010 0.040 }} ]
+      }}
+      Transform {{
+        translation 0 0.032 0.043
+        children [ Box {{ size 0.140 0.008 0.004 }} ]
+      }}
+      Transform {{
+        translation 0 -0.032 0.043
+        children [ Box {{ size 0.140 0.008 0.004 }} ]
       }}
       Transform {{
         translation 0.055 0.046 -0.008
         rotation 1 0 0 1.5708
-        children [ USE CYL_WHEEL ]
+        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
       }}
       Transform {{
         translation 0.055 -0.046 -0.008
         rotation 1 0 0 1.5708
-        children [ USE CYL_WHEEL ]
+        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
       }}
       Transform {{
         translation -0.055 0.046 -0.008
         rotation 1 0 0 1.5708
-        children [ USE CYL_WHEEL ]
+        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
       }}
       Transform {{
         translation -0.055 -0.046 -0.008
         rotation 1 0 0 1.5708
-        children [ USE CYL_WHEEL ]
+        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
       }}
     ]
   }}
   physics Physics {{
     density -1
     mass 0.200
-    centerOfMass [ 0 0 0.005 ]
+    centerOfMass [ 0 0 0.008 ]
     damping Damping {{
-      linear 0.002
+      linear 0.001
       angular 0.002
     }}
   }}
 }}
 ''')
 
-    # MALETA FISICA (7.5x5x4 cm, masa 18g)
-    maleta_init_x = x1_start + 0.04 * math.cos(theta1)
-    maleta_init_y = y1_start
-    maleta_init_z = z1_start - 0.04 * math.sin(theta1) + 0.025
-    
+    # ========================================================
+    # 5. MALETA FISICA (7.5x5x4 cm, Masa 18g)
+    # ========================================================
+    x_loc_m = -L1/2.0 + 0.0525
+    y_loc_m = 0.0
+    z_loc_m = T_floor/2.0 + 0.020 + 0.002
+
+    maleta_init_x = cx1 + x_loc_m * math.cos(theta1) + z_loc_m * math.sin(theta1)
+    maleta_init_y = cy1
+    maleta_init_z = cz1 - x_loc_m * math.sin(theta1) + z_loc_m * math.cos(theta1)
+
     world_content.append(f'''
 # ========================================================
-# MALETA (7.5x5x4 cm, Masa 18g + Carga)
+# MALETA (7.5x5x4 cm, Masa 18g, h_inicial={maleta_init_z:.3f}m)
 # ========================================================
 DEF MALETA Solid {{
   translation {maleta_init_x:.5f} {maleta_init_y:.5f} {maleta_init_z:.5f}
@@ -1092,13 +969,11 @@ DEF MALETA Solid {{
   children [
     Shape {{
       appearance PBRAppearance {{
-        baseColor 0.80 0.45 0.15
-        roughness 0.4
-        metalness 0.1
+        baseColor 0.85 0.50 0.15
+        roughness 0.35
+        metalness 0.10
       }}
-      geometry DEF BOX_MALETA Box {{
-        size 0.075 0.05 0.04
-      }}
+      geometry Box {{ size 0.075 0.050 0.040 }}
     }}
     Transform {{
       translation 0 0 0.024
@@ -1108,65 +983,61 @@ DEF MALETA Solid {{
             baseColor 0.15 0.15 0.15
             roughness 0.5
           }}
-          geometry Box {{
-            size 0.04 0.008 0.008
-          }}
+          geometry Box {{ size 0.040 0.008 0.008 }}
         }}
       ]
     }}
     Transform {{
-      translation 0.02 0 0
+      translation 0.020 0 0
       children [
         Shape {{
           appearance PBRAppearance {{
-            baseColor 0.1 0.1 0.1
+            baseColor 0.10 0.10 0.10
             roughness 0.6
           }}
-          geometry Box {{
-            size 0.008 0.052 0.042
-          }}
+          geometry Box {{ size 0.008 0.052 0.042 }}
         }}
       ]
     }}
     Transform {{
-      translation -0.02 0 0
+      translation -0.020 0 0
       children [
         Shape {{
           appearance PBRAppearance {{
-            baseColor 0.1 0.1 0.1
+            baseColor 0.10 0.10 0.10
             roughness 0.6
           }}
-          geometry Box {{
-            size 0.008 0.052 0.042
-          }}
+          geometry Box {{ size 0.008 0.052 0.042 }}
         }}
       ]
     }}
   ]
   name "maleta"
   contactMaterial "SuitcaseMaterial"
-  boundingObject USE BOX_MALETA
+  boundingObject Box {{ size 0.075 0.050 0.040 }}
   physics Physics {{
     density -1
     mass 0.018
     centerOfMass [ 0 0 0 ]
     damping Damping {{
-      linear 0.001
-      angular 0.005
+      linear 0.0005
+      angular 0.001
     }}
   }}
 }}
 ''')
 
-    # SUPERVISOR
+    # ========================================================
+    # 6. ROBOT SUPERVISOR DE FISICA
+    # ========================================================
     world_content.append('''
 # ========================================================
 # CONTROLADOR SUPERVISOR DE FISICA
 # ========================================================
 Robot {
-  supervisor TRUE
-  controller "pista_supervisor"
   name "supervisor_fisica"
+  controller "pista_supervisor"
+  supervisor TRUE
 }
 ''')
 
@@ -1175,6 +1046,12 @@ Robot {
     with open(output_path, "w", encoding="utf-8") as f:
         f.writelines(world_content)
     print(f"Mundo Webots creado exitosamente en: {output_path}")
+
+    # Sincronizar archivo raíz
+    root_path = "pista_montana_rusa.wbt"
+    with open(root_path, "w", encoding="utf-8") as f:
+        f.writelines(world_content)
+    print(f"Mundo Webots sincronizado en la raíz: {root_path}")
 
 if __name__ == "__main__":
     create_world()
