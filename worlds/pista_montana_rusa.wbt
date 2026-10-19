@@ -1,0 +1,2636 @@
+#VRML_SIM R2023b utf8
+
+WorldInfo {
+  info [
+    "Simulacion de Fisica: Pista Montana Rusa con Carrito y Maleta",
+    "Proyecto de Fisica Mecanica - Analisis de Energia, Momento y Frenado"
+  ]
+  title "Pista Montana Rusa - Laboratorio de Fisica"
+  ERP 0.6
+  basicTimeStep 4
+  coordinateSystem "ENU"
+  contactProperties [
+    ContactProperties {
+      material1 "CartWheelMaterial"
+      material2 "TrackMaterial"
+      coulombFriction [ 0.005 ]
+    }
+    ContactProperties {
+      material1 "CartWheelMaterial"
+      material2 "BrakingTrackMaterial"
+      coulombFriction [ 1.35 ]
+    }
+    ContactProperties {
+      material1 "SuitcaseMaterial"
+      material2 "RampMaterial"
+      coulombFriction [ 0.02 ]
+    }
+    ContactProperties {
+      material1 "SuitcaseMaterial"
+      material2 "CartInteriorMaterial"
+      coulombFriction [ 0.70 ]
+      bounce 0.02
+    }
+    ContactProperties {
+      material1 "CartBodyMaterial"
+      material2 "TrackMaterial"
+      coulombFriction [ 0.01 ]
+    }
+  ]
+}
+
+Viewpoint {
+  orientation 0.280985 0.351231 0.893132 4.35
+  position 2.50 -1.40 2.20
+  near 0.05
+}
+
+Background {
+  skyColor [
+    0.15 0.18 0.25
+  ]
+}
+
+DirectionalLight {
+  ambientIntensity 0.4
+  direction -0.4 0.3 -0.8
+  intensity 1.4
+  castShadows TRUE
+}
+
+# Suelo de laboratorio base (plataforma de 2.5m x 2.5m)
+Solid {
+  translation 0.65 0.45 -0.01
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.22 0.24 0.28
+        roughness 0.4
+        metalness 0.1
+      }
+      geometry Box {
+        size 2.5 2.5 0.02
+      }
+    }
+  ]
+  name "suelo_laboratorio"
+  boundingObject Box {
+    size 2.5 2.5 0.02
+  }
+}
+
+# ========================================================
+# SECCION 1: RAMPA INICIAL DE LA MALETA (L=47cm, 30 deg)
+# ========================================================
+DEF RAMPA_1 Solid {
+  translation 0.30352 0.20000 1.08250
+  rotation 0 1 0 0.523599
+  children [
+    # Lecho de la rampa
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.85 0.20 0.20
+        roughness 0.15
+        metalness 0.2
+      }
+      geometry DEF BOX_LECHO_R1 Box {
+        size 0.4700 0.10 0.01
+      }
+    }
+    # Guardarrail Izquierdo
+    Transform {
+      translation 0 0.052 0.02
+      children [
+        Shape {
+          appearance DEF APP_GUARD PBRAppearance {
+            baseColor 0.9 0.9 0.95
+            transparency 0.35
+            roughness 0.1
+            metalness 0.3
+          }
+          geometry DEF BOX_GUARD_R1 Box {
+            size 0.4700 0.005 0.035
+          }
+        }
+      ]
+    }
+    # Guardarrail Derecho
+    Transform {
+      translation 0 -0.052 0.02
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry USE BOX_GUARD_R1
+        }
+      ]
+    }
+    # Soporte vertical inicio (h=1.20m)
+    Transform {
+      translation -0.2350 0 -0.5413
+      rotation 0 1 0 -0.523599
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.4 0.45 0.5
+            metalness 0.8
+            roughness 0.3
+          }
+          geometry Cylinder {
+            height 1.2000
+            radius 0.02
+          }
+        }
+      ]
+    }
+  ]
+  name "rampa_1"
+  contactMaterial "RampMaterial"
+  boundingObject Group {
+    children [
+      USE BOX_LECHO_R1
+      Transform {
+        translation 0 0.052 0.02
+        children [ USE BOX_GUARD_R1 ]
+      }
+      Transform {
+        translation 0 -0.052 0.02
+        children [ USE BOX_GUARD_R1 ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# SECCION 2: ESTACION DE TRANSFERENCIA (Caida 5cm)
+# ========================================================
+DEF ESTACION_TRANSFERENCIA Solid {
+  translation 0.62703 0.20000 0.91500
+  children [
+    # Lecho horizontal
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.15 0.45 0.85
+        roughness 0.2
+        metalness 0.3
+      }
+      geometry DEF BOX_LECHO_TRANSF Box {
+        size 0.2400 0.11 0.01
+      }
+    }
+    # Guardarrail Izquierdo
+    Transform {
+      translation 0 0.057 0.02
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry DEF BOX_GUARD_TRANSF Box {
+            size 0.2400 0.005 0.035
+          }
+        }
+      ]
+    }
+    # Guardarrail Derecho
+    Transform {
+      translation 0 -0.057 0.02
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry USE BOX_GUARD_TRANSF
+        }
+      ]
+    }
+    # Tope posterior para el carrito (evita que retroceda)
+    Transform {
+      translation -0.1150 0 0.025
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.95 0.6 0.1
+            roughness 0.3
+          }
+          geometry Box {
+            size 0.01 0.11 0.04
+          }
+        }
+      ]
+    }
+    # Soporte vertical de la estacion
+    Transform {
+      translation 0 0 -0.4575
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.4 0.45 0.5
+            metalness 0.8
+            roughness 0.3
+          }
+          geometry Cylinder {
+            height 0.9150
+            radius 0.02
+          }
+        }
+      ]
+    }
+  ]
+  name "estacion_transferencia"
+  contactMaterial "TrackMaterial"
+  boundingObject Group {
+    children [
+      USE BOX_LECHO_TRANSF
+      Transform {
+        translation 0 0.057 0.02
+        children [ USE BOX_GUARD_TRANSF ]
+      }
+      Transform {
+        translation 0 -0.057 0.02
+        children [ USE BOX_GUARD_TRANSF ]
+      }
+      Transform {
+        translation -0.1150 0 0.025
+        children [
+          Box { size 0.01 0.11 0.04 }
+        ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# SECCION 3: BAJADA 2 (L=50cm, 45 deg)
+# ========================================================
+DEF BAJADA_2 Solid {
+  translation 0.92381 0.20000 0.73822
+  rotation 0 1 0 0.785398
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.15 0.45 0.85
+        roughness 0.2
+        metalness 0.3
+      }
+      geometry DEF BOX_LECHO_B2 Box {
+        size 0.5000 0.11 0.01
+      }
+    }
+    Transform {
+      translation 0 0.057 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry DEF BOX_GUARD_B2 Box {
+            size 0.5000 0.005 0.04
+          }
+        }
+      ]
+    }
+    Transform {
+      translation 0 -0.057 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry DEF BOX_GUARD_B2
+        }
+      ]
+    }
+  ]
+  name "bajada_2"
+  contactMaterial "TrackMaterial"
+  boundingObject Group {
+    children [
+      USE BOX_LECHO_B2
+      Transform {
+        translation 0 0.057 0.022
+        children [ USE BOX_GUARD_B2 ]
+      }
+      Transform {
+        translation 0 -0.057 0.022
+        children [ USE BOX_GUARD_B2 ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# SECCION 4: CURVA PERALTADA 1 (90 deg, R=10cm, Peralte 30 deg)
+# ========================================================
+DEF CURVA_1 Solid {
+  children [
+    Transform {
+      translation 1.10713 0.20021 0.56145
+      rotation 0.99210 0.03248 0.12121 0.52758
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_0 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_0 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_0
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.12009 0.20192 0.56145
+      rotation 0.93462 0.09205 0.34354 0.55841
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_1 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_1 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_1
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.13273 0.20531 0.56145
+      rotation 0.84307 0.13919 0.51947 0.61546
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_2 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_2 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_2
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.14481 0.21031 0.56145
+      rotation 0.74297 0.17324 0.64652 0.69226
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_3 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_3 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_3
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.15614 0.21685 0.56145
+      rotation 0.64907 0.19689 0.73481 0.78302
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_4 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_4 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_4
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.16652 0.22482 0.56145
+      rotation 0.56662 0.21326 0.79590 0.88345
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_5 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_5 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_5
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.17577 0.23407 0.56145
+      rotation 0.49601 0.22474 0.83873 0.99060
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_6 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_6 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_6
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.18373 0.24444 0.56145
+      rotation 0.43581 0.23295 0.86937 1.10250
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_7 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_7 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_7
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.19027 0.25577 0.56145
+      rotation 0.38426 0.23895 0.89177 1.21784
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_8 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_8 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_8
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.19528 0.26786 0.56145
+      rotation 0.33970 0.24343 0.90848 1.33572
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_9 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_9 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_9
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.19866 0.28049 0.56145
+      rotation 0.30077 0.24683 0.92120 1.45551
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_10 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_10 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_10
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.20037 0.29346 0.56145
+      rotation 0.26636 0.24947 0.93103 1.57676
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C1_11 Box {
+            size 0.0137 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G1_11 Box {
+                size 0.0137 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G1_11
+            }
+          ]
+        }
+      ]
+    }
+  ]
+  name "curva_1"
+  contactMaterial "TrackMaterial"
+  boundingObject Group {
+    children [
+      Transform {
+        translation 1.10713 0.20021 0.56145
+        rotation 0.99210 0.03248 0.12121 0.52758
+        children [
+          USE BOX_C1_0
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_0 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_0 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.12009 0.20192 0.56145
+        rotation 0.93462 0.09205 0.34354 0.55841
+        children [
+          USE BOX_C1_1
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_1 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_1 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.13273 0.20531 0.56145
+        rotation 0.84307 0.13919 0.51947 0.61546
+        children [
+          USE BOX_C1_2
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_2 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_2 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.14481 0.21031 0.56145
+        rotation 0.74297 0.17324 0.64652 0.69226
+        children [
+          USE BOX_C1_3
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_3 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_3 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.15614 0.21685 0.56145
+        rotation 0.64907 0.19689 0.73481 0.78302
+        children [
+          USE BOX_C1_4
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_4 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_4 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.16652 0.22482 0.56145
+        rotation 0.56662 0.21326 0.79590 0.88345
+        children [
+          USE BOX_C1_5
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_5 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_5 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.17577 0.23407 0.56145
+        rotation 0.49601 0.22474 0.83873 0.99060
+        children [
+          USE BOX_C1_6
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_6 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_6 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.18373 0.24444 0.56145
+        rotation 0.43581 0.23295 0.86937 1.10250
+        children [
+          USE BOX_C1_7
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_7 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_7 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.19027 0.25577 0.56145
+        rotation 0.38426 0.23895 0.89177 1.21784
+        children [
+          USE BOX_C1_8
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_8 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_8 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.19528 0.26786 0.56145
+        rotation 0.33970 0.24343 0.90848 1.33572
+        children [
+          USE BOX_C1_9
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_9 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_9 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.19866 0.28049 0.56145
+        rotation 0.30077 0.24683 0.92120 1.45551
+        children [
+          USE BOX_C1_10
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_10 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_10 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.20037 0.29346 0.56145
+        rotation 0.26636 0.24947 0.93103 1.57676
+        children [
+          USE BOX_C1_11
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G1_11 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G1_11 ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# SECCION 5: SUBIDA (L=47cm, 30 deg hacia arriba en +Y)
+# ========================================================
+DEF SUBIDA Solid {
+  translation 1.20059 0.50352 0.67895
+  rotation 1 0 0 -0.523599
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.15 0.45 0.85
+        roughness 0.2
+        metalness 0.3
+      }
+      geometry DEF BOX_LECHO_S Box {
+        size 0.11 0.4700 0.01
+      }
+    }
+    Transform {
+      translation 0.057 0 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry DEF BOX_GUARD_S Box {
+            size 0.005 0.4700 0.04
+          }
+        }
+      ]
+    }
+    Transform {
+      translation -0.057 0 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry USE BOX_GUARD_S
+        }
+      ]
+    }
+    # Soporte central subida
+    Transform {
+      translation 0 0 -0.3395
+      rotation 1 0 0 0.523599
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.4 0.45 0.5
+            metalness 0.8
+            roughness 0.3
+          }
+          geometry Cylinder {
+            height 0.6789
+            radius 0.02
+          }
+        }
+      ]
+    }
+  ]
+  name "subida"
+  contactMaterial "TrackMaterial"
+  boundingObject Group {
+    children [
+      USE BOX_LECHO_S
+      Transform {
+        translation 0.057 0 0.022
+        children [ USE BOX_GUARD_S ]
+      }
+      Transform {
+        translation -0.057 0 0.022
+        children [ USE BOX_GUARD_S ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# SECCION 6: CRESTA RECTA HORIZONTAL (L=10cm)
+# ========================================================
+DEF CRESTA Solid {
+  translation 1.20059 0.75703 0.79645
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.15 0.45 0.85
+        roughness 0.2
+        metalness 0.3
+      }
+      geometry DEF BOX_LECHO_C Box {
+        size 0.11 0.1000 0.01
+      }
+    }
+    Transform {
+      translation 0.057 0 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry DEF BOX_GUARD_C Box {
+            size 0.005 0.1000 0.04
+          }
+        }
+      ]
+    }
+    Transform {
+      translation -0.057 0 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry USE BOX_GUARD_C
+        }
+      ]
+    }
+  ]
+  name "cresta"
+  contactMaterial "TrackMaterial"
+  boundingObject Group {
+    children [
+      USE BOX_LECHO_C
+      Transform {
+        translation 0.057 0 0.022
+        children [ USE BOX_GUARD_C ]
+      }
+      Transform {
+        translation -0.057 0 0.022
+        children [ USE BOX_GUARD_C ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# SECCION 7: BAJADA Y CURVA 2 (180 deg, R=18cm, Hacia Suelo)
+# ========================================================
+DEF CURVA_2 Solid {
+  children [
+    Transform {
+      translation 1.20020 0.81880 0.79562
+      rotation -0.05926 0.07684 0.99528 1.63936
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_0 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_0 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_0
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.19713 0.84215 0.78899
+      rotation -0.16896 0.19406 0.96633 1.78697
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_1 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_1 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_1
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.19103 0.86489 0.77584
+      rotation -0.25659 0.26391 0.92979 1.93185
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_2 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_2 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_2
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.18202 0.88664 0.75641
+      rotation -0.32268 0.29887 0.89809 2.06399
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_3 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_3 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_3
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.17025 0.90703 0.73102
+      rotation -0.37269 0.31126 0.87420 2.18302
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_4 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_4 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_4
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.15592 0.92571 0.70011
+      rotation -0.41150 0.30923 0.85734 2.29220
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_5 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_5 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_5
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.13927 0.94236 0.66420
+      rotation -0.44244 0.29763 0.84597 2.39514
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_6 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_6 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_6
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.12059 0.95670 0.62391
+      rotation -0.46758 0.27927 0.83868 2.49487
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_7 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_7 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_7
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.10020 0.96847 0.57993
+      rotation -0.48818 0.25586 0.83440 2.59369
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_8 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_8 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_8
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.07844 0.97748 0.53301
+      rotation -0.50497 0.22848 0.83235 2.69337
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_9 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_9 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_9
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.05570 0.98357 0.48396
+      rotation -0.51837 0.19785 0.83196 2.79526
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_10 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_10 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_10
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.03236 0.98665 0.43361
+      rotation -0.52852 0.16453 0.83283 2.90037
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_11 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_11 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_11
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 1.00881 0.98665 0.38283
+      rotation -0.53540 0.12895 0.83470 3.00952
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_12 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_12 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_12
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.98547 0.98357 0.33248
+      rotation -0.53885 0.09154 0.83742 3.12337
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_13 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_13 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_13
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.96273 0.97748 0.28343
+      rotation 0.53851 -0.05275 -0.84097 3.04072
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_14 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_14 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_14
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.94097 0.96847 0.23652
+      rotation 0.53385 -0.01313 -0.84548 2.91582
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_15 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_15 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_15
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.92058 0.95670 0.19254
+      rotation 0.52407 0.02657 -0.85126 2.78452
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_16 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_16 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_16
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.90190 0.94236 0.15225
+      rotation 0.50799 0.06527 -0.85889 2.64604
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_17 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_17 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_17
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.88525 0.92571 0.11634
+      rotation 0.48379 0.10130 -0.86930 2.49932
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_18 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_18 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_18
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.87092 0.90703 0.08543
+      rotation 0.44866 0.13190 -0.88392 2.34300
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_19 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_19 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_19
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.85915 0.88664 0.06004
+      rotation 0.39810 0.15237 -0.90460 2.17565
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_20 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_20 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_20
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.85014 0.86489 0.04060
+      rotation 0.32520 0.15473 -0.93290 1.99728
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_21 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_21 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_21
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.84404 0.84215 0.02746
+      rotation 0.22095 0.12651 -0.96704 1.81355
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_22 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_22 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_22
+            }
+          ]
+        }
+      ]
+    }
+    Transform {
+      translation 0.84097 0.81880 0.02083
+      rotation 0.08043 0.05402 -0.99529 1.64255
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.45 0.85
+            roughness 0.2
+            metalness 0.3
+          }
+          geometry DEF BOX_C2_23 Box {
+            size 0.0247 0.11 0.01
+          }
+        }
+        Transform {
+          translation 0 0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry DEF BOX_G2_23 Box {
+                size 0.0247 0.005 0.045
+              }
+            }
+          ]
+        }
+        Transform {
+          translation 0 -0.057 0.025
+          children [
+            Shape {
+              appearance USE APP_GUARD
+              geometry USE BOX_G2_23
+            }
+          ]
+        }
+      ]
+    }
+  ]
+  name "curva_2"
+  contactMaterial "TrackMaterial"
+  boundingObject Group {
+    children [
+      Transform {
+        translation 1.20020 0.81880 0.79562
+        rotation -0.05926 0.07684 0.99528 1.63936
+        children [
+          USE BOX_C2_0
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_0 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_0 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.19713 0.84215 0.78899
+        rotation -0.16896 0.19406 0.96633 1.78697
+        children [
+          USE BOX_C2_1
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_1 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_1 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.19103 0.86489 0.77584
+        rotation -0.25659 0.26391 0.92979 1.93185
+        children [
+          USE BOX_C2_2
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_2 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_2 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.18202 0.88664 0.75641
+        rotation -0.32268 0.29887 0.89809 2.06399
+        children [
+          USE BOX_C2_3
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_3 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_3 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.17025 0.90703 0.73102
+        rotation -0.37269 0.31126 0.87420 2.18302
+        children [
+          USE BOX_C2_4
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_4 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_4 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.15592 0.92571 0.70011
+        rotation -0.41150 0.30923 0.85734 2.29220
+        children [
+          USE BOX_C2_5
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_5 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_5 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.13927 0.94236 0.66420
+        rotation -0.44244 0.29763 0.84597 2.39514
+        children [
+          USE BOX_C2_6
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_6 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_6 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.12059 0.95670 0.62391
+        rotation -0.46758 0.27927 0.83868 2.49487
+        children [
+          USE BOX_C2_7
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_7 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_7 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.10020 0.96847 0.57993
+        rotation -0.48818 0.25586 0.83440 2.59369
+        children [
+          USE BOX_C2_8
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_8 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_8 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.07844 0.97748 0.53301
+        rotation -0.50497 0.22848 0.83235 2.69337
+        children [
+          USE BOX_C2_9
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_9 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_9 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.05570 0.98357 0.48396
+        rotation -0.51837 0.19785 0.83196 2.79526
+        children [
+          USE BOX_C2_10
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_10 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_10 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.03236 0.98665 0.43361
+        rotation -0.52852 0.16453 0.83283 2.90037
+        children [
+          USE BOX_C2_11
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_11 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_11 ]
+          }
+        ]
+      }
+      Transform {
+        translation 1.00881 0.98665 0.38283
+        rotation -0.53540 0.12895 0.83470 3.00952
+        children [
+          USE BOX_C2_12
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_12 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_12 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.98547 0.98357 0.33248
+        rotation -0.53885 0.09154 0.83742 3.12337
+        children [
+          USE BOX_C2_13
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_13 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_13 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.96273 0.97748 0.28343
+        rotation 0.53851 -0.05275 -0.84097 3.04072
+        children [
+          USE BOX_C2_14
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_14 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_14 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.94097 0.96847 0.23652
+        rotation 0.53385 -0.01313 -0.84548 2.91582
+        children [
+          USE BOX_C2_15
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_15 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_15 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.92058 0.95670 0.19254
+        rotation 0.52407 0.02657 -0.85126 2.78452
+        children [
+          USE BOX_C2_16
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_16 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_16 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.90190 0.94236 0.15225
+        rotation 0.50799 0.06527 -0.85889 2.64604
+        children [
+          USE BOX_C2_17
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_17 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_17 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.88525 0.92571 0.11634
+        rotation 0.48379 0.10130 -0.86930 2.49932
+        children [
+          USE BOX_C2_18
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_18 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_18 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.87092 0.90703 0.08543
+        rotation 0.44866 0.13190 -0.88392 2.34300
+        children [
+          USE BOX_C2_19
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_19 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_19 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.85915 0.88664 0.06004
+        rotation 0.39810 0.15237 -0.90460 2.17565
+        children [
+          USE BOX_C2_20
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_20 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_20 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.85014 0.86489 0.04060
+        rotation 0.32520 0.15473 -0.93290 1.99728
+        children [
+          USE BOX_C2_21
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_21 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_21 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.84404 0.84215 0.02746
+        rotation 0.22095 0.12651 -0.96704 1.81355
+        children [
+          USE BOX_C2_22
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_22 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_22 ]
+          }
+        ]
+      }
+      Transform {
+        translation 0.84097 0.81880 0.02083
+        rotation 0.08043 0.05402 -0.99529 1.64255
+        children [
+          USE BOX_C2_23
+          Transform {
+            translation 0 0.057 0.025
+            children [ USE BOX_G2_23 ]
+          }
+          Transform {
+            translation 0 -0.057 0.025
+            children [ USE BOX_G2_23 ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# SECCION 8: TRAMO FINAL DE FRENADO (L=75cm, Suelo h=0)
+# ========================================================
+DEF ZONA_FRENADO Solid {
+  translation 0.84059 0.43203 0.02000
+  children [
+    # Lecho con textura de alto rozamiento
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.90 0.75 0.15
+        roughness 0.9
+        metalness 0.05
+      }
+      geometry DEF BOX_LECHO_FRENO Box {
+        size 0.11 0.7500 0.01
+      }
+    }
+    # Guardarrail Izquierdo
+    Transform {
+      translation 0.057 0 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry DEF BOX_GUARD_FRENO Box {
+            size 0.005 0.7500 0.04
+          }
+        }
+      ]
+    }
+    # Guardarrail Derecho
+    Transform {
+      translation -0.057 0 0.022
+      children [
+        Shape {
+          appearance USE APP_GUARD
+          geometry USE BOX_GUARD_FRENO
+        }
+      ]
+    }
+    # Tope terminal de seguridad al final de la pista
+    Transform {
+      translation 0 -0.3650 0.03
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.85 0.1 0.1
+            roughness 0.5
+          }
+          geometry Box {
+            size 0.11 0.02 0.05
+          }
+        }
+      ]
+    }
+  ]
+  name "zona_frenado"
+  contactMaterial "BrakingTrackMaterial"
+  boundingObject Group {
+    children [
+      USE BOX_LECHO_FRENO
+      Transform {
+        translation 0.057 0 0.022
+        children [ USE BOX_GUARD_FRENO ]
+      }
+      Transform {
+        translation -0.057 0 0.022
+        children [ USE BOX_GUARD_FRENO ]
+      }
+      Transform {
+        translation 0 -0.3650 0.03
+        children [
+          Box { size 0.11 0.02 0.05 }
+        ]
+      }
+    ]
+  }
+}
+
+# ========================================================
+# CARRITO DE LABORATORIO (M=200g, 17x9x4.5cm, Cavidad 14x6cm)
+# ========================================================
+DEF CARRITO Solid {
+  translation 0.61703 0.20000 0.94300
+  children [
+    # Chasis principal del carrito con cavidad interior
+    Shape {
+      appearance DEF APP_CAR_BODY PBRAppearance {
+        baseColor 0.05 0.70 0.35
+        roughness 0.25
+        metalness 0.4
+      }
+      geometry DEF BOX_CAR_BASE Box {
+        size 0.17 0.09 0.01
+      }
+    }
+    # Pared frontal del receptaculo
+    Transform {
+      translation 0.075 0 0.018
+      children [
+        Shape {
+          appearance USE APP_CAR_BODY
+          geometry Box { size 0.02 0.09 0.026 }
+        }
+      ]
+    }
+    # Pared trasera del receptaculo
+    Transform {
+      translation -0.075 0 0.018
+      children [
+        Shape {
+          appearance USE APP_CAR_BODY
+          geometry Box { size 0.02 0.09 0.026 }
+        }
+      ]
+    }
+    # Pared lateral izquierda
+    Transform {
+      translation 0 0.0375 0.018
+      children [
+        Shape {
+          appearance USE APP_CAR_BODY
+          geometry Box { size 0.14 0.015 0.026 }
+        }
+      ]
+    }
+    # Pared lateral derecha
+    Transform {
+      translation 0 -0.0375 0.018
+      children [
+        Shape {
+          appearance USE APP_CAR_BODY
+          geometry Box { size 0.14 0.015 0.026 }
+        }
+      ]
+    }
+    # Fondo de la cavidad receptora (material de alta amortiguacion)
+    Transform {
+      translation 0 0 0.006
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.15 0.18
+            roughness 0.8
+          }
+          geometry Box { size 0.14 0.06 0.002 }
+        }
+      ]
+    }
+    # 4 Ruedas de bajo rozamiento
+    Transform {
+      translation 0.055 0.046 -0.008
+      rotation 1 0 0 1.5708
+      children [
+        Shape {
+          appearance DEF APP_WHEEL PBRAppearance {
+            baseColor 0.1 0.1 0.1
+            roughness 0.3
+            metalness 0.8
+          }
+          geometry DEF CYL_WHEEL Cylinder {
+            height 0.008
+            radius 0.014
+          }
+        }
+      ]
+    }
+    Transform {
+      translation 0.055 -0.046 -0.008
+      rotation 1 0 0 1.5708
+      children [
+        Shape {
+          appearance USE APP_WHEEL
+          geometry USE CYL_WHEEL
+        }
+      ]
+    }
+    Transform {
+      translation -0.055 0.046 -0.008
+      rotation 1 0 0 1.5708
+      children [
+        Shape {
+          appearance USE APP_WHEEL
+          geometry USE CYL_WHEEL
+        }
+      ]
+    }
+    Transform {
+      translation -0.055 -0.046 -0.008
+      rotation 1 0 0 1.5708
+      children [
+        Shape {
+          appearance USE APP_WHEEL
+          geometry USE CYL_WHEEL
+        }
+      ]
+    }
+  ]
+  name "carrito"
+  contactMaterial "CartWheelMaterial"
+  boundingObject Group {
+    children [
+      USE BOX_CAR_BASE
+      Transform {
+        translation 0.075 0 0.018
+        children [ Box { size 0.02 0.09 0.026 } ]
+      }
+      Transform {
+        translation -0.075 0 0.018
+        children [ Box { size 0.02 0.09 0.026 } ]
+      }
+      Transform {
+        translation 0 0.0375 0.018
+        children [ Box { size 0.14 0.015 0.026 } ]
+      }
+      Transform {
+        translation 0 -0.0375 0.018
+        children [ Box { size 0.14 0.015 0.026 } ]
+      }
+      Transform {
+        translation 0.055 0.046 -0.008
+        rotation 1 0 0 1.5708
+        children [ USE CYL_WHEEL ]
+      }
+      Transform {
+        translation 0.055 -0.046 -0.008
+        rotation 1 0 0 1.5708
+        children [ USE CYL_WHEEL ]
+      }
+      Transform {
+        translation -0.055 0.046 -0.008
+        rotation 1 0 0 1.5708
+        children [ USE CYL_WHEEL ]
+      }
+      Transform {
+        translation -0.055 -0.046 -0.008
+        rotation 1 0 0 1.5708
+        children [ USE CYL_WHEEL ]
+      }
+    ]
+  }
+  physics Physics {
+    density -1
+    mass 0.200
+    centerOfMass [ 0 0 0.005 ]
+    damping Damping {
+      linear 0.002
+      angular 0.002
+    }
+  }
+}
+
+# ========================================================
+# MALETA (7.5x5x4 cm, Masa 18g + Carga)
+# ========================================================
+DEF MALETA Solid {
+  translation 0.13464 0.20000 1.20500
+  rotation 0 1 0 0.523599
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.80 0.45 0.15
+        roughness 0.4
+        metalness 0.1
+      }
+      geometry DEF BOX_MALETA Box {
+        size 0.075 0.05 0.04
+      }
+    }
+    Transform {
+      translation 0 0 0.024
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.15 0.15 0.15
+            roughness 0.5
+          }
+          geometry Box {
+            size 0.04 0.008 0.008
+          }
+        }
+      ]
+    }
+    Transform {
+      translation 0.02 0 0
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.1 0.1 0.1
+            roughness 0.6
+          }
+          geometry Box {
+            size 0.008 0.052 0.042
+          }
+        }
+      ]
+    }
+    Transform {
+      translation -0.02 0 0
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.1 0.1 0.1
+            roughness 0.6
+          }
+          geometry Box {
+            size 0.008 0.052 0.042
+          }
+        }
+      ]
+    }
+  ]
+  name "maleta"
+  contactMaterial "SuitcaseMaterial"
+  boundingObject USE BOX_MALETA
+  physics Physics {
+    density -1
+    mass 0.018
+    centerOfMass [ 0 0 0 ]
+    damping Damping {
+      linear 0.001
+      angular 0.005
+    }
+  }
+}
+
+# ========================================================
+# CONTROLADOR SUPERVISOR DE FISICA
+# ========================================================
+Robot {
+  supervisor TRUE
+  controller "pista_supervisor"
+  name "supervisor_fisica"
+}
