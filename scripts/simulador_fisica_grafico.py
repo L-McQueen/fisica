@@ -57,10 +57,10 @@ def run_physics_simulation():
     v_ideal_peralte1 = math.sqrt(g * R1 * math.tan(math.radians(18)))
     a_centripeta1 = (v2**2) / R1
     
-    # 4. Subida: L=0.47m, 30 deg
-    L3 = 0.47
+    # 4. Subida rebajada: dh = 0.107m, 30 deg
+    dh3 = 0.107
     theta3 = math.radians(30)
-    dh3 = L3 * math.sin(theta3)
+    L3 = dh3 / math.sin(theta3)
     h3 = h2 + dh3
     v3 = math.sqrt(v2**2 - 2 * g * dh3)
     

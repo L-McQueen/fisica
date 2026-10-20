@@ -20,19 +20,20 @@ def create_smooth_spine():
     """
     slices = [] # lista de (P, T, L, U, is_brake)
 
-    def add_slice(P, T, L, U, is_brake=False):
-        slices.append((P, T, L, U, is_brake))
+    def add_slice(P, T, L, U, is_brake=False, custom_pts=None):
+        slices.append((P, T, L, U, is_brake, custom_pts))
 
     y_line = 0.20
 
     # -------------------------------------------------------------
     # 1. Estación de Transferencia (Horizontal, h = 0.915m)
-    # x: 0.46m a 0.62m (L = 0.16m)
+    # Sección plana alargada a 35cm antes de la caída (x: 0.44m a 0.79m)
+    # Permite que el carrito espere en reposo estático hasta el impacto
     # -------------------------------------------------------------
-    x_plat_start = 0.46
-    x_plat_end = 0.62
+    x_plat_start = 0.44
+    x_plat_end = 0.79
     z_plat = 0.915
-    N_plat = 10
+    N_plat = 18
     for i in range(N_plat + 1):
         u = i / float(N_plat)
         x = x_plat_start + u * (x_plat_end - x_plat_start)
@@ -82,11 +83,11 @@ def create_smooth_spine():
     z_valle_start = z
 
     # -------------------------------------------------------------
-    # 4. Transición Cóncava de Valle: De -45° a horizontal (0°)
-    # Arco circular de radio R = 0.20m
+    # 4. Transición Cóncava de Valle Suave: De -45° a horizontal (0°)
+    # Arco circular de radio ampliado R = 0.30m para eliminar el impacto vertical
     # -------------------------------------------------------------
-    R_t2 = 0.20
-    N_t2 = 14
+    R_t2 = 0.30
+    N_t2 = 18
     for i in range(1, N_t2 + 1):
         alpha = math.radians(45) * (1.0 - i / float(N_t2))
         x = x_valle_start + R_t2 * (math.sin(math.radians(45)) - math.sin(alpha))
@@ -97,37 +98,74 @@ def create_smooth_spine():
         U = [sa, 0.0, ca]
         add_slice([x, y_line, z], T, L, U)
 
-    x_c1_start = x
-    z_c1 = z # ~0.561m
+    x_straight_start = x
+    z_straight = z
 
     # -------------------------------------------------------------
-    # 5. Curva 1: Giro suave de 90° hacia +Y con peralte
-    # Radio R = 0.18m
+    # 4b. Tramo Recto de Asentamiento Horizontal (L = 12cm)
+    # Permite que el carrito se nivele y estabilice tras el valle en cota plana z_straight.
+    # Cero torsión transversal (dz = 0): vía completamente plana, nivelada y amplia (14cm).
     # -------------------------------------------------------------
-    R1 = 0.18
+    L_straight = 0.12
+    N_straight = 12
+
+    for i in range(1, N_straight + 1):
+        x = x_straight_start + (i / float(N_straight)) * L_straight
+        P = [x, y_line, z_straight]
+        T = [1.0, 0.0, 0.0]
+        L = [0.0, 1.0, 0.0]
+        U = [0.0, 0.0, 1.0]
+        add_slice(P, T, L, U)
+
+    x_c1_start = x
+    z_c1 = z_straight
+
+    # -------------------------------------------------------------
+    # 5. Curva 1: Giro circular de 90° hacia +Y con Peralte Puro Rotado a 30°
+    # - Marco ortonormal exacto (P, T, L, U): U-channel canónico sin distorsión
+    # - Ancho constante W = 14.0cm en base y coronación: cero acuñamiento
+    # - Pared exterior perpendicular al piso peraltado: inclinada 30° hacia el INTERIOR
+    #   actuando como techo de retención física anti-desborde (imposible salir volando)
+    # - Roll-in y roll-out cúbicos ultrasuaves con continuidad C1 perfecta (0.000mm)
+    # -------------------------------------------------------------
+    R1 = 0.35
     x_c1_center = x_c1_start
     y_c1_center = y_line + R1
-    N_c1 = 24
-    peralte1_max = math.radians(18)
+    N_c1 = 36
+    theta_bank_max = math.radians(30.0) # 30 grados de peralte real rotado (~7.0cm de desnivel)
+
     for i in range(1, N_c1 + 1):
         phi = -math.pi/2.0 + (i / float(N_c1)) * (math.pi/2.0)
-        px = x_c1_center + R1 * math.cos(phi)
-        py = y_c1_center + R1 * math.sin(phi)
-        pz = z_c1
+        
+        # Roll-in cúbico progresivo (1..14, 25cm), meseta sostenida (15..22, 15cm), roll-out cúbico (23..36, 25cm)
+        if i <= 14:
+            v = i / 14.0
+            theta = theta_bank_max * (3.0 * v**2 - 2.0 * v**3)
+        elif i <= 22:
+            theta = theta_bank_max
+        else:
+            v = (36 - i) / 14.0
+            theta = theta_bank_max * (3.0 * v**2 - 2.0 * v**3)
 
+        rx = math.cos(phi)
+        ry = math.sin(phi)
+        
+        # Centro de la vía en arco circular a cota constante z_c1:
+        P = [x_c1_center + R1 * rx, y_c1_center + R1 * ry, z_c1]
         T = [-math.sin(phi), math.cos(phi), 0.0]
-        L_flat = [math.cos(phi), math.sin(phi), 0.0]
+        L_flat = [-rx, -ry, 0.0]
         U_flat = [0.0, 0.0, 1.0]
+        
+        # Rotación de peralte canónica (L inclinado hacia abajo al interior, U perpendicular al piso inclinado hacia adentro):
+        ct, st = math.cos(theta), math.sin(theta)
+        L = [ct * L_flat[k] - st * U_flat[k] for k in range(3)]
+        U = [st * L_flat[k] + ct * U_flat[k] for k in range(3)]
+        
+        add_slice(P, T, L, U)
 
-        bank = peralte1_max * math.sin((i / float(N_c1)) * math.pi)
-        cb, sb = math.cos(bank), math.sin(bank)
-        L = [L_flat[k]*cb + U_flat[k]*sb for k in range(3)]
-        U = [-L_flat[k]*sb + U_flat[k]*cb for k in range(3)]
-        add_slice([px, py, pz], T, L, U)
-
-    x_hill_start = px
-    y_hill_start = py
-    z_hill_start = pz
+    x_hill_start = x_c1_center + R1
+    y_hill_start = y_c1_center
+    z_hill_start = z_c1
 
     # -------------------------------------------------------------
     # 6. Transición Cóncava hacia Subida: De horizontal (0°) a +30° en +Y
@@ -141,7 +179,7 @@ def create_smooth_spine():
         z = z_hill_start + R_t3 * (1.0 - math.cos(beta))
         cb, sb = math.cos(beta), math.sin(beta)
         T = [0.0, cb, sb]
-        L = [1.0, 0.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
         U = [0.0, -sb, cb]
         add_slice([x_hill_start, y, z], T, L, U)
 
@@ -152,7 +190,7 @@ def create_smooth_spine():
     # 7. Subida Recta a +30° en +Y
     # Longitud L = 0.336m
     # -------------------------------------------------------------
-    L_sub = 0.336
+    L_sub = 0.080
     cb30 = math.cos(math.radians(30))
     sb30 = math.sin(math.radians(30))
     N_sub = 18
@@ -161,7 +199,7 @@ def create_smooth_spine():
         y = y_sub_start + s * cb30
         z = z_sub_start + s * sb30
         T = [0.0, cb30, sb30]
-        L = [1.0, 0.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
         U = [0.0, -sb30, cb30]
         add_slice([x_hill_start, y, z], T, L, U)
 
@@ -180,7 +218,7 @@ def create_smooth_spine():
         z = z_crown_start + R_t4 * (math.cos(beta) - math.cos(math.radians(30)))
         cb, sb = math.cos(beta), math.sin(beta)
         T = [0.0, cb, sb]
-        L = [1.0, 0.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
         U = [0.0, -sb, cb]
         add_slice([x_hill_start, y, z], T, L, U)
 
@@ -197,7 +235,7 @@ def create_smooth_spine():
         y = y_crest_start + (i / float(N_crest)) * L_crest
         P = [x_hill_start, y, z_crest]
         T = [0.0, 1.0, 0.0]
-        L = [1.0, 0.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
         U = [0.0, 0.0, 1.0]
         add_slice(P, T, L, U)
 
@@ -208,7 +246,7 @@ def create_smooth_spine():
     # Pendiente uniforme a 45° con empalmes parabólicos en cresta y valle
     # Cero aceleración centrípeta durante todo el descenso (a_c = 0)
     # -------------------------------------------------------------
-    z_ground = 0.020
+    z_ground = 0.045
     R_desc = 0.25
     theta_desc = math.radians(45)
 
@@ -220,7 +258,7 @@ def create_smooth_spine():
         z = z_crest - R_desc * (1.0 - math.cos(gamma))
         cg, sg = math.cos(gamma), math.sin(gamma)
         T = [0.0, cg, -sg]
-        L = [1.0, 0.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
         U = [0.0, sg, cg]
         add_slice([x_hill_start, y, z], T, L, U)
 
@@ -238,7 +276,7 @@ def create_smooth_spine():
         y = y_desc_straight_start + s * math.cos(theta_desc)
         z = z_desc_straight_start - s * math.sin(theta_desc)
         T = [0.0, math.cos(theta_desc), -math.sin(theta_desc)]
-        L = [1.0, 0.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
         U = [0.0, math.sin(theta_desc), math.cos(theta_desc)]
         add_slice([x_hill_start, y, z], T, L, U)
 
@@ -253,23 +291,23 @@ def create_smooth_spine():
         z = z_desc_valle_start - R_desc * (math.cos(gamma) - math.cos(theta_desc))
         cg, sg = math.cos(gamma), math.sin(gamma)
         T = [0.0, cg, -sg]
-        L = [1.0, 0.0, 0.0]
+        L = [-1.0, 0.0, 0.0]
         U = [0.0, sg, cg]
         add_slice([x_hill_start, y, z], T, L, U)
 
     y_ground_start = y
-    z_at_ground = z # 0.020m exactamente
+    z_at_ground = z # 0.045m exactamente
 
     # -------------------------------------------------------------
-    # 11. NUEVA SECCION: CURVA PLANA DE 180° EN EL SUELO (z=0.020m)
-    # Gira 180° en el plano horizontal (R = 0.25m), peralte de 22°
-    # Ya en el suelo, con estabilidad gravitacional total
+    # 11. NUEVA SECCION: CURVA PLANA DE 180° EN EL SUELO (z=0.045m)
+    # Gira 180° en el plano horizontal (R = 0.28m), peralte de 20°
+    # Ya en el suelo, con estabilidad gravitacional total y despeje sobre z=0
     # -------------------------------------------------------------
-    R2 = 0.25
+    R2 = 0.28
     x_c2_center = x_hill_start - R2
     y_c2_center = y_ground_start
     N_c2 = 36
-    peralte2_max = math.radians(22)
+    peralte2_max = math.radians(20)
     for i in range(1, N_c2 + 1):
         psi = (i / float(N_c2)) * math.pi
         px = x_c2_center + R2 * math.cos(psi)
@@ -278,14 +316,14 @@ def create_smooth_spine():
 
         # Tangente en el plano XY
         T = [-math.sin(psi), math.cos(psi), 0.0]
-        L_flat = [math.cos(psi), math.sin(psi), 0.0]
+        L_flat = [-math.cos(psi), -math.sin(psi), 0.0]
         U_flat = [0.0, 0.0, 1.0]
 
-        # Peralte interior para compensar la fuerza centrifuga
-        bank = peralte2_max * math.sin(psi)
+        # Peralte interior para compensar la fuerza centrifuga: exterior elevado e interior rebajado suavemente
+        bank = peralte2_max * (math.sin(psi)**2)
         cb, sb = math.cos(bank), math.sin(bank)
-        L = [L_flat[k]*cb + U_flat[k]*sb for k in range(3)]
-        U = [-L_flat[k]*sb + U_flat[k]*cb for k in range(3)]
+        L = [L_flat[k]*cb - U_flat[k]*sb for k in range(3)]
+        U = [L_flat[k]*sb + U_flat[k]*cb for k in range(3)]
         add_slice([px, py, pz], T, L, U)
 
     x_brake_start = px
@@ -301,7 +339,7 @@ def create_smooth_spine():
         y = y_brake_start - (i / float(N_brake)) * L_brake
         P = [x_brake_start, y, z_ground]
         T = [0.0, -1.0, 0.0]
-        L = [-1.0, 0.0, 0.0]
+        L = [1.0, 0.0, 0.0]
         U = [0.0, 0.0, 1.0]
         add_slice(P, T, L, U, is_brake=True)
 
@@ -315,13 +353,18 @@ def generate_circuit_mesh_vrml(slices, W_bed=0.11, H_guard=0.055, T_floor=0.010)
     points = []
     coord_indices = []
 
-    for idx, (P, T, L, U, is_brake) in enumerate(slices):
-        p0 = [P[i] - (W_bed/2.0)*L[i] + H_guard*U[i] for i in range(3)]
-        p1 = [P[i] - (W_bed/2.0)*L[i] for i in range(3)]
-        p2 = [P[i] + (W_bed/2.0)*L[i] for i in range(3)]
-        p3 = [P[i] + (W_bed/2.0)*L[i] + H_guard*U[i] for i in range(3)]
-        p4 = [P[i] + (W_bed/2.0)*L[i] - T_floor*U[i] for i in range(3)]
-        p5 = [P[i] - (W_bed/2.0)*L[i] - T_floor*U[i] for i in range(3)]
+    for idx, item in enumerate(slices):
+        P, T, L, U, is_brake = item[0], item[1], item[2], item[3], item[4]
+        custom_pts = item[5] if len(item) > 5 else None
+        if custom_pts is not None:
+            p0, p1, p2, p3, p4, p5 = custom_pts
+        else:
+            p0 = [P[i] - (W_bed/2.0)*L[i] + H_guard*U[i] for i in range(3)]
+            p1 = [P[i] - (W_bed/2.0)*L[i] for i in range(3)]
+            p2 = [P[i] + (W_bed/2.0)*L[i] for i in range(3)]
+            p3 = [P[i] + (W_bed/2.0)*L[i] + H_guard*U[i] for i in range(3)]
+            p4 = [P[i] + (W_bed/2.0)*L[i] - T_floor*U[i] for i in range(3)]
+            p5 = [P[i] - (W_bed/2.0)*L[i] - T_floor*U[i] for i in range(3)]
         points.extend([p0, p1, p2, p3, p4, p5])
 
     num_quads = len(slices) - 1
@@ -429,62 +472,72 @@ WorldInfo {
       material2 "TrackMaterial"
       coulombFriction [ 0.02 ]
       bounce 0.02
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "SuitcaseMaterial"
       material2 "CartMaterial"
       coulombFriction [ 0.95 ]
       bounce 0.01
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "SuitcaseMaterial"
       material2 "CartInteriorMaterial"
       coulombFriction [ 1.20 ]
       bounce 0.005
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "SuitcaseMaterial"
       material2 "SuitcaseMaterial"
       coulombFriction [ 0.02 ]
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "SuitcaseMaterial"
       material2 "default"
       coulombFriction [ 0.02 ]
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "CartMaterial"
       material2 "TrackMaterial"
       coulombFriction [ 0.005 ]
       bounce 0.02
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "CartMaterial"
       material2 "BrakingMaterial"
       coulombFriction [ 1.35 ]
       bounce 0.01
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "CartMaterial"
       material2 "CartMaterial"
       coulombFriction [ 0.005 ]
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "CartMaterial"
       material2 "default"
       coulombFriction [ 0.005 ]
+      maxContactJoints 64
     }
     ContactProperties {
       material1 "default"
       material2 "default"
       coulombFriction [ 0.5 ]
+      maxContactJoints 64
     }
   ]
 }
 
 Viewpoint {
-  orientation -0.320 0.880 0.350 1.250
-  position 2.50 -1.80 2.00
+  orientation 0.8958 0.2351 0.3773 1.2154
+  position 2.50 -1.60 2.00
 }
 
 TexturedBackground {
@@ -495,7 +548,7 @@ TexturedBackgroundLight {
 
 # Suelo y mesa de laboratorio base amplia (plataforma de 2.8m x 2.8m)
 Solid {
-  translation 0.80 0.95 -0.015
+  translation 0.80 1.15 -0.015
   children [
     Shape {
       appearance PBRAppearance {
@@ -515,8 +568,8 @@ Solid {
 }
 ''')
 
-    W_bed = 0.11
-    H_guard = 0.055 # Guardarraíles elevados a 5.5cm para evitar cualquier descarrilamiento
+    W_bed = 0.14    # Pista ensanchada a 14.0cm para holgura total y cero roce
+    H_guard = 0.080 # Guardarraíles elevados a 8.0cm para retención física absoluta en todo el circuito
     T_floor = 0.010
     T_guard = 0.006
     z_plat = 0.915
@@ -541,11 +594,11 @@ Solid {
     cz1 = (z1_start + z1_end) / 2.0
     rot_rampa1 = f"0 1 0 {theta1:.6f}"
 
-    # Lengüeta curvada de transición
+    # Lengüeta curvada de transición suave hacia la cavidad
     chute_points = []
     chute_indices = []
-    N_chute = 10
-    R_chute = 0.18
+    N_chute = 8
+    R_chute = 0.05
     for i in range(N_chute + 1):
         ang = theta1 * (1.0 - i / float(N_chute))
         dx_c = R_chute * (math.sin(theta1) - math.sin(ang))
@@ -628,20 +681,23 @@ DEF RAMPA_1 Solid {{
   contactMaterial "TrackMaterial"
   boundingObject Group {{
     children [
+      # Lecho de la rampa
       Transform {{
         translation {cx1:.5f} {cy1:.5f} {cz1:.5f}
         rotation {rot_rampa1}
-        children [
-          Box {{ size {L1:.4f} {W_bed} {T_floor} }}
-          Transform {{
-            translation 0 {(W_bed/2.0 + T_guard/2.0):.4f} {(H_guard/2.0):.4f}
-            children [ Box {{ size {L1:.4f} {T_guard} {H_guard} }} ]
-          }}
-          Transform {{
-            translation 0 {- (W_bed/2.0 + T_guard/2.0):.4f} {(H_guard/2.0):.4f}
-            children [ Box {{ size {L1:.4f} {T_guard} {H_guard} }} ]
-          }}
-        ]
+        children [ Box {{ size {L1:.4f} {W_bed} {T_floor} }} ]
+      }}
+      # Guardarrail izquierdo
+      Transform {{
+        translation {cx1 + (H_guard/2.0)*math.sin(theta1):.5f} {cy1 + (W_bed/2.0 + T_guard/2.0):.5f} {cz1 + (H_guard/2.0)*math.cos(theta1):.5f}
+        rotation {rot_rampa1}
+        children [ Box {{ size {L1:.4f} {T_guard} {H_guard} }} ]
+      }}
+      # Guardarrail derecho
+      Transform {{
+        translation {cx1 + (H_guard/2.0)*math.sin(theta1):.5f} {cy1 - (W_bed/2.0 + T_guard/2.0):.5f} {cz1 + (H_guard/2.0)*math.cos(theta1):.5f}
+        rotation {rot_rampa1}
+        children [ Box {{ size {L1:.4f} {T_guard} {H_guard} }} ]
       }}
       USE GEO_CHUTE
     ]
@@ -664,17 +720,19 @@ DEF RAMPA_1 Solid {{
 ''')
 
     # ========================================================
+    # ========================================================
     # 3. ESTRUCTURA DE SOPORTE METALICA ANCLADA AL SUELO
-    # Columnas verticales de acero estructural en las uniones elevadas
+    # Columnas cilíndricas esbeltas que terminan exactamente bajo el lecho de la vía
+    # Sin placas horizontales intrusivas que penetren en la pista
     # ========================================================
     pillar_locs = [
-        (x1_start, y1_start, z1_start - T_floor/2.0),
-        (0.60, y1_start, z_plat - T_floor/2.0),
-        (slices[40][0][0], slices[40][0][1], slices[40][0][2] - T_floor/2.0),
-        (slices[64][0][0], slices[64][0][1], slices[64][0][2] - T_floor/2.0),
-        (slices[92][0][0], slices[92][0][1], slices[92][0][2] - T_floor/2.0),
-        # Soporte bajo el punto medio de la bajada recta hacia el suelo
-        (slices[115][0][0], slices[115][0][1], slices[115][0][2] - T_floor/2.0)
+        (0.08, y1_start, 1.20 - 0.020),
+        (0.44, y1_start, z_plat - 0.020),
+        (0.79, y1_start, z_plat - 0.020),
+        (slices[68][0][0], slices[68][0][1], slices[68][0][2] - 0.020),
+        (slices[116][0][0], slices[116][0][1], slices[116][0][2] - 0.020),
+        (slices[162][0][0], slices[162][0][1], slices[162][0][2] - 0.020),
+        (slices[194][0][0], slices[194][0][1], slices[194][0][2] - 0.020)
     ]
 
     pillar_children = []
@@ -694,32 +752,20 @@ DEF RAMPA_1 Solid {{
           }}
           geometry Cylinder {{
             height {h_pillar:.4f}
-            radius 0.016
+            radius 0.014
           }}
         }}
       ]
     }}
     # Brida de anclaje al suelo de soporte {idx+1}
     Transform {{
-      translation {px:.5f} {py:.5f} 0.005
+      translation {px:.5f} {py:.5f} 0.003
       children [
         Shape {{
           appearance USE APP_STEEL
           geometry Cylinder {{
-            height 0.010
-            radius 0.038
-          }}
-        }}
-      ]
-    }}
-    # Soporte superior de fijacion a via {idx+1}
-    Transform {{
-      translation {px:.5f} {py:.5f} {h_pillar - 0.005:.4f}
-      children [
-        Shape {{
-          appearance USE APP_STEEL
-          geometry Box {{
-            size 0.070 0.120 0.010
+            height 0.006
+            radius 0.026
           }}
         }}
       ]
@@ -739,20 +785,19 @@ Solid {{
 ''')
 
     # ========================================================
-    # 4. CARRITO CON JAULA DE RETENCION ENVOLVENTE
-    # - Paredes de 4.0cm de alto con labios superiores de captura
-    #   que impiden que la maleta sea expulsada verticalmente
-    # - Suelo interior antideslizante con CartInteriorMaterial (mu=1.20)
-    # - Pared frontal alta acolchada
-    # - Entrada trasera abierta para que la maleta entre suavemente
+    # 4. CARRITO DE LABORATORIO ESBELTO Y DINAMICO
+    # - Ancho total entre ruedas: 9.4cm (dentro de vía de 11.0cm, 8mm de margen por lado)
+    # - Cero rozamiento ni acuñamiento con guardarraíles
+    # - Cavidad interior libre (6.2cm ancho para maleta de 5.0cm)
+    # - Ruedas con esferas analíticas para rodadura ultrasuave
     # ========================================================
-    cart_init_x = 0.550
+    cart_init_x = 0.540
     cart_init_y = y1_start
-    cart_init_z = z_plat + 0.0275
+    cart_init_z = z_plat + 0.020
 
     world_content.append(f'''
 # ========================================================
-# CARRITO DE LABORATORIO (M=200g con Jaula de Retencion Envolvente)
+# CARRITO DE LABORATORIO (M=200g, Ancho 9.4cm, Rodadura Libre)
 # ========================================================
 DEF CARRITO Solid {{
   translation {cart_init_x:.5f} {cart_init_y:.5f} {cart_init_z:.5f}
@@ -764,84 +809,84 @@ DEF CARRITO Solid {{
         roughness 0.20
         metalness 0.40
       }}
-      geometry Box {{ size 0.170 0.090 0.010 }}
+      geometry Box {{ size 0.140 0.070 0.008 }}
     }}
-    # Pared frontal alta receptora del empuje (4.0cm alto, inclinada 5° hacia atras)
+    # Pared frontal alta receptora del empuje (4.5cm alto)
     Transform {{
-      translation 0.075 0 0.025
+      translation 0.065 0 0.023
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.020 0.090 0.040 }}
+          geometry Box {{ size 0.010 0.070 0.045 }}
         }}
       ]
     }}
     # Pared trasera baja de entrada biselada (ras de suelo)
     Transform {{
-      translation -0.075 0 0.007
+      translation -0.065 0 0.002
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.020 0.090 0.004 }}
+          geometry Box {{ size 0.008 0.070 0.002 }}
         }}
       ]
     }}
-    # Pared lateral izquierda (4.0cm de alto)
+    # Pared lateral izquierda (4.5cm de alto)
     Transform {{
-      translation 0 0.040 0.025
+      translation 0 0.033 0.023
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.140 0.010 0.040 }}
+          geometry Box {{ size 0.120 0.004 0.045 }}
         }}
       ]
     }}
-    # Pared lateral derecha (4.0cm de alto)
+    # Pared lateral derecha (4.5cm de alto)
     Transform {{
-      translation 0 -0.040 0.025
+      translation 0 -0.033 0.023
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.140 0.010 0.040 }}
+          geometry Box {{ size 0.120 0.004 0.045 }}
         }}
       ]
     }}
-    # Pestaña de retención superior izquierda (labio de encaste que evita que la maleta salte)
+    # Pestaña de retención superior izquierda (labio de captura)
     Transform {{
-      translation 0 0.032 0.043
+      translation 0 0.030 0.043
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.140 0.008 0.004 }}
+          geometry Box {{ size 0.120 0.006 0.004 }}
         }}
       ]
     }}
-    # Pestaña de retención superior derecha (labio de encaste que evita que la maleta salte)
+    # Pestaña de retención superior derecha (labio de captura)
     Transform {{
-      translation 0 -0.032 0.043
+      translation 0 -0.030 0.043
       children [
         Shape {{
           appearance USE APP_CAR_BODY
-          geometry Box {{ size 0.140 0.008 0.004 }}
+          geometry Box {{ size 0.120 0.006 0.004 }}
         }}
       ]
     }}
     # Suelo interior acolchado de alto agarre (CartInteriorMaterial mu=1.20)
     Transform {{
-      translation 0 0 0.006
+      translation 0 0 0.005
       children [
         Shape {{
           appearance PBRAppearance {{
             baseColor 0.12 0.12 0.15
             roughness 0.95
           }}
-          geometry Box {{ size 0.140 0.068 0.002 }}
+          geometry Box {{ size 0.120 0.060 0.002 }}
         }}
       ]
     }}
     # 4 Ruedas de bajisimo rozamiento
     Transform {{
-      translation 0.055 0.046 -0.008
+      translation 0.045 0.035 -0.006
       rotation 1 0 0 1.5708
       children [
         Shape {{
@@ -850,37 +895,37 @@ DEF CARRITO Solid {{
             roughness 0.2
             metalness 0.8
           }}
-          geometry Cylinder {{ height 0.008 radius 0.014 }}
+          geometry Cylinder {{ height 0.006 radius 0.012 }}
         }}
       ]
     }}
     Transform {{
-      translation 0.055 -0.046 -0.008
+      translation 0.045 -0.035 -0.006
       rotation 1 0 0 1.5708
       children [
         Shape {{
           appearance USE APP_WHEEL
-          geometry Cylinder {{ height 0.008 radius 0.014 }}
+          geometry Cylinder {{ height 0.006 radius 0.012 }}
         }}
       ]
     }}
     Transform {{
-      translation -0.055 0.046 -0.008
+      translation -0.045 0.035 -0.006
       rotation 1 0 0 1.5708
       children [
         Shape {{
           appearance USE APP_WHEEL
-          geometry Cylinder {{ height 0.008 radius 0.014 }}
+          geometry Cylinder {{ height 0.006 radius 0.012 }}
         }}
       ]
     }}
     Transform {{
-      translation -0.055 -0.046 -0.008
+      translation -0.045 -0.035 -0.006
       rotation 1 0 0 1.5708
       children [
         Shape {{
           appearance USE APP_WHEEL
-          geometry Cylinder {{ height 0.008 radius 0.014 }}
+          geometry Cylinder {{ height 0.006 radius 0.012 }}
         }}
       ]
     }}
@@ -889,57 +934,78 @@ DEF CARRITO Solid {{
   contactMaterial "CartMaterial"
   boundingObject Group {{
     children [
-      Box {{ size 0.170 0.090 0.010 }}
+      # Chasis base estrechado (ancho 48mm) para que con balanceo de 25° no toque nunca el suelo
+      Box {{ size 0.130 0.048 0.008 }}
+      # Pared frontal interior
       Transform {{
-        translation 0.075 0 0.025
-        children [ Box {{ size 0.020 0.090 0.040 }} ]
+        translation 0.060 0 0.023
+        children [ Box {{ size 0.008 0.050 0.040 }} ]
+      }}
+      # Pared trasera interior
+      Transform {{
+        translation -0.060 0 0.002
+        children [ Box {{ size 0.008 0.050 0.002 }} ]
+      }}
+      # Pared lateral izquierda interior
+      Transform {{
+        translation 0 0.027 0.023
+        children [ Box {{ size 0.110 0.004 0.040 }} ]
+      }}
+      # Pared lateral derecha interior
+      Transform {{
+        translation 0 -0.027 0.023
+        children [ Box {{ size 0.110 0.004 0.040 }} ]
+      }}
+      # Labios superiores de retención de la maleta (apertura amplia de 5.2cm para maleta de 3.8cm)
+      Transform {{
+        translation 0 0.028 0.043
+        children [ Box {{ size 0.110 0.004 0.004 }} ]
       }}
       Transform {{
-        translation -0.075 0 0.007
-        children [ Box {{ size 0.020 0.090 0.004 }} ]
+        translation 0 -0.028 0.043
+        children [ Box {{ size 0.110 0.004 0.004 }} ]
+      }}
+      # 4 Parachoques y deflectores esféricos en las 4 esquinas perimetrales exteriores:
+      # Cualquier contacto lateral con guardarraíles se produce sobre esferas analíticas sin fricción ni momento de giro
+      Transform {{
+        translation 0.065 0.035 0.015
+        children [ Sphere {{ radius 0.012 }} ]
       }}
       Transform {{
-        translation 0 0.040 0.025
-        children [ Box {{ size 0.140 0.010 0.040 }} ]
+        translation 0.065 -0.035 0.015
+        children [ Sphere {{ radius 0.012 }} ]
       }}
       Transform {{
-        translation 0 -0.040 0.025
-        children [ Box {{ size 0.140 0.010 0.040 }} ]
+        translation -0.065 0.035 0.015
+        children [ Sphere {{ radius 0.012 }} ]
       }}
       Transform {{
-        translation 0 0.032 0.043
-        children [ Box {{ size 0.140 0.008 0.004 }} ]
+        translation -0.065 -0.035 0.015
+        children [ Sphere {{ radius 0.012 }} ]
+      }}
+      # 4 Ruedas de bajísimo rozamiento (esferas analíticas)
+      Transform {{
+        translation 0.045 0.035 -0.006
+        children [ Sphere {{ radius 0.012 }} ]
       }}
       Transform {{
-        translation 0 -0.032 0.043
-        children [ Box {{ size 0.140 0.008 0.004 }} ]
+        translation 0.045 -0.035 -0.006
+        children [ Sphere {{ radius 0.012 }} ]
       }}
       Transform {{
-        translation 0.055 0.046 -0.008
-        rotation 1 0 0 1.5708
-        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
+        translation -0.045 0.035 -0.006
+        children [ Sphere {{ radius 0.012 }} ]
       }}
       Transform {{
-        translation 0.055 -0.046 -0.008
-        rotation 1 0 0 1.5708
-        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
-      }}
-      Transform {{
-        translation -0.055 0.046 -0.008
-        rotation 1 0 0 1.5708
-        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
-      }}
-      Transform {{
-        translation -0.055 -0.046 -0.008
-        rotation 1 0 0 1.5708
-        children [ Cylinder {{ height 0.008 radius 0.014 }} ]
+        translation -0.045 -0.035 -0.006
+        children [ Sphere {{ radius 0.012 }} ]
       }}
     ]
   }}
   physics Physics {{
     density -1
     mass 0.200
-    centerOfMass [ 0 0 0.008 ]
+    centerOfMass [ 0 0 0.006 ]
     damping Damping {{
       linear 0.001
       angular 0.002
@@ -949,11 +1015,12 @@ DEF CARRITO Solid {{
 ''')
 
     # ========================================================
-    # 5. MALETA FISICA (7.5x5x4 cm, Masa 18g)
+    # 5. MALETA FISICA (6.0x3.8x3.0 cm, Masa 18g)
+    # Dimensiones compactas para entrada y acople fluido sin atascos
     # ========================================================
     x_loc_m = -L1/2.0 + 0.0525
     y_loc_m = 0.0
-    z_loc_m = T_floor/2.0 + 0.020 + 0.002
+    z_loc_m = T_floor/2.0 + 0.015 + 0.002
 
     maleta_init_x = cx1 + x_loc_m * math.cos(theta1) + z_loc_m * math.sin(theta1)
     maleta_init_y = cy1
@@ -961,7 +1028,7 @@ DEF CARRITO Solid {{
 
     world_content.append(f'''
 # ========================================================
-# MALETA (7.5x5x4 cm, Masa 18g, h_inicial={maleta_init_z:.3f}m)
+# MALETA (6.0x3.8x3.0 cm, Masa 18g, h_inicial={maleta_init_z:.3f}m)
 # ========================================================
 DEF MALETA Solid {{
   translation {maleta_init_x:.5f} {maleta_init_y:.5f} {maleta_init_z:.5f}
@@ -973,48 +1040,48 @@ DEF MALETA Solid {{
         roughness 0.35
         metalness 0.10
       }}
-      geometry Box {{ size 0.075 0.050 0.040 }}
+      geometry Box {{ size 0.060 0.038 0.030 }}
     }}
     Transform {{
-      translation 0 0 0.024
+      translation 0 0 0.018
       children [
         Shape {{
           appearance PBRAppearance {{
             baseColor 0.15 0.15 0.15
             roughness 0.5
           }}
-          geometry Box {{ size 0.040 0.008 0.008 }}
+          geometry Box {{ size 0.032 0.006 0.006 }}
         }}
       ]
     }}
     Transform {{
-      translation 0.020 0 0
+      translation 0.016 0 0
       children [
         Shape {{
           appearance PBRAppearance {{
             baseColor 0.10 0.10 0.10
             roughness 0.6
           }}
-          geometry Box {{ size 0.008 0.052 0.042 }}
+          geometry Box {{ size 0.006 0.040 0.032 }}
         }}
       ]
     }}
     Transform {{
-      translation -0.020 0 0
+      translation -0.016 0 0
       children [
         Shape {{
           appearance PBRAppearance {{
             baseColor 0.10 0.10 0.10
             roughness 0.6
           }}
-          geometry Box {{ size 0.008 0.052 0.042 }}
+          geometry Box {{ size 0.006 0.040 0.032 }}
         }}
       ]
     }}
   ]
   name "maleta"
   contactMaterial "SuitcaseMaterial"
-  boundingObject Box {{ size 0.075 0.050 0.040 }}
+  boundingObject Box {{ size 0.060 0.038 0.030 }}
   physics Physics {{
     density -1
     mass 0.018

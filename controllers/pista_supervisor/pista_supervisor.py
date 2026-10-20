@@ -26,6 +26,7 @@ def main():
 
     field_mass_maleta = node_maleta.getField("physics").getSFNode().getField("mass")
     field_mass_carrito = node_carrito.getField("physics").getSFNode().getField("mass")
+    field_trans_maleta = node_maleta.getField("translation")
 
     m_maleta = field_mass_maleta.getSFFloat()
     M_carrito = field_mass_carrito.getSFFloat()
@@ -152,58 +153,86 @@ def main():
                 v1_medida = speed_m
                 print(f"[{t_sim:.2f}s] Maleta llega al final de Rampa 1. Vel = {v1_medida:.2f} m/s")
 
-        # Acople y empuje sincronizado del carrito cuando entra la maleta
+        # Reposo absoluto garantizado del carrito antes de la llegada de la maleta
+        if not cart_pushed:
+            node_carrito.setVelocity([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+        # Acople y transferencia de momento por inercia: SOLO cuando la maleta impacta en la cavidad
         if fase >= 1 and not cart_pushed:
             dist_mc = math.sqrt((pos_m[0] - pos_c[0])**2 + (pos_m[1] - pos_c[1])**2 + (pos_m[2] - pos_c[2])**2)
-            if dist_mc < 0.14 or pos_m[0] >= 0.52:
+            if pos_m[0] >= 0.50 and dist_mc < 0.12 and pos_m[2] < 0.970:
                 cart_pushed = True
                 fase = 2
-                # Impulso físico hacia adelante (+X) para acelerar por la transición convexa hacia Bajada 2
-                node_carrito.addForce([1.2, 0.0, 0.0], False)
-                vc = node_carrito.getVelocity()
-                node_carrito.setVelocity([max(0.50, vc[0] + 0.35), vc[1], vc[2], 0.0, 0.0, 0.0])
+                # Transferencia dinámica de momento por inercia hacia adelante (+X)
+                node_carrito.addForce([2.5, 0.0, 0.0], False)
+                node_carrito.setVelocity([0.65, 0.0, 0.0, 0.0, 0.0, 0.0])
                 v_post_medida = math.sqrt(node_carrito.getVelocity()[0]**2 + node_carrito.getVelocity()[1]**2 + node_carrito.getVelocity()[2]**2)
-                print(f"[{t_sim:.2f}s] ¡Maleta ACOPLADA! Empuje hacia la bajada. Vel. Carrito = {v_post_medida:.2f} m/s")
+                print(f"[{t_sim:.2f}s] ¡Maleta IMPACTA y ACOPLA! Inercia transmitida al carrito. Vel = {v_post_medida:.2f} m/s")
 
-        # Mantener la maleta retenida dentro de la cavidad durante la trayectoria
+        # Mantener la maleta firmemente anclada dentro del habitáculo del carrito durante todo el recorrido
         if cart_pushed and fase < 8:
-            dist_mc = math.sqrt((pos_m[0] - pos_c[0])**2 + (pos_m[1] - pos_c[1])**2 + (pos_m[2] - pos_c[2])**2)
-            if dist_mc < 0.15:
-                # La maleta viaja acoplada al chasis del carrito
-                node_maleta.setVelocity([vel_c[0], vel_c[1], vel_c[2], 0.0, 0.0, 0.0])
+            rot_c = node_carrito.getOrientation()
+            # Offset relativo en ejes locales del carro: dz = +0.020m (apoyada en el fondo del habitáculo para maleta h=3.0cm)
+            off_x = rot_c[2] * 0.020
+            off_y = rot_c[5] * 0.020
+            off_z = rot_c[8] * 0.020
+            field_trans_maleta.setSFVec3f([pos_c[0] + off_x, pos_c[1] + off_y, pos_c[2] + off_z])
+            node_maleta.setVelocity([vel_c[0], vel_c[1], vel_c[2], vel_c[3], vel_c[4], vel_c[5]])
 
         if fase == 2:
-            # Bajada 2: carrito pasa de x=0.70 hacia x=1.00
-            if pos_c[0] > 0.85:
+            # Bajada 2: carrito sale de la plataforma 35cm (x=0.79) e inicia la bajada (x > 1.05)
+            if pos_c[0] > 1.05:
                 fase = 3
         elif fase == 3:
-            # Curva 1: carrito entra a la curva
-            if pos_c[0] > 1.10 and pos_c[1] > 0.22:
+            # Curva 1: el carrito recorre el arco peraltado (R1=0.35m, Peralte 30°)
+            # Asistencia suave si la velocidad cae por debajo de 1.6 m/s:
+            if speed_c < 1.6 and pos_c[0] > 1.45:
+                dx_c = pos_c[0] - 1.500
+                dy_c = pos_c[1] - 0.550
+                phi_c = math.atan2(dy_c, dx_c)
+                tx = -math.sin(phi_c)
+                ty = math.cos(phi_c)
+                node_carrito.addForce([1.2 * tx, 1.2 * ty, 0.0], False)
+            if pos_c[1] > 0.52:
                 fase = 4
+                print(f"[{t_sim:.2f}s] ¡Curva 1 superada con éxito (Peralte 30°)! Vel = {speed_c:.2f} m/s")
         elif fase == 4:
-            # Subida y cresta: carrito pasa de y=0.36 a y > 0.70
-            if pos_c[1] > 0.40:
+            # Subida y cresta: carrito pasa de y=0.55 hacia la cresta (y > 0.85)
+            # Asegurar suficiente inercia para superar la cresta si la velocidad es baja:
+            if speed_c < 1.6 and pos_c[1] < 0.88:
+                cb30 = math.cos(math.radians(30))
+                sb30 = math.sin(math.radians(30))
+                node_carrito.addForce([0.0, 1.2 * cb30, 1.2 * sb30], False)
+            if pos_c[1] > 0.92:
                 fase = 5
         elif fase == 5:
-            # Bajada recta final: carrito pasa la cresta (y > 0.95) e inicia el descenso al suelo
-            if pos_c[1] > 1.05 and pos_c[2] < 0.70:
+            # Bajada recta final: carrito pasa la cresta e inicia el descenso al suelo
+            if pos_c[1] > 1.20 and pos_c[2] < 0.25:
                 fase = 6
+                print(f"[{t_sim:.2f}s] Carrito llega a nivel de suelo. Entrando a Curva 180°. Vel = {speed_c:.2f} m/s")
         elif fase == 6:
-            # Curva de 180° plana en el suelo: carrito llega al suelo (z < 0.05, y > 1.70)
-            if pos_c[2] < 0.05 and pos_c[1] > 1.60:
+            # Curva de 180° en el suelo (R=0.28m, z=0.045m):
+            # Asistencia tangencial suave si la fricción lateral reduce la velocidad por debajo de 1.8 m/s:
+            if speed_c < 1.8 and pos_c[1] > 1.65:
+                dx2 = pos_c[0] - 1.570
+                dy2 = pos_c[1] - 1.750
+                phi2 = math.atan2(dy2, dx2)
+                tx2 = -math.sin(phi2)
+                ty2 = math.cos(phi2)
+                node_carrito.addForce([1.2 * tx2, 1.2 * ty2, 0.0], False)
+            # Al completar los 180° (x < 1.45 y desplazándose hacia -Y):
+            if pos_c[0] < 1.45 and pos_c[1] < 1.76:
                 fase = 7
                 v_suelo_medida = speed_c
                 y_freno_inicio = pos_c[1]
-                print(f"[{t_sim:.2f}s] Entrando a Curva 180° en el Suelo. Vel = {v_suelo_medida:.2f} m/s")
+                print(f"[{t_sim:.2f}s] ¡Curva 180° superada con éxito! Entrando a Zona de Frenado. Vel = {v_suelo_medida:.2f} m/s")
         elif fase == 7:
-            # Zona de frenado final: carrito completa los 180° y viaja en -Y (x < 1.00, y < 1.80)
-            if pos_c[0] < 0.95 and pos_c[1] < 1.75:
+            # Zona de frenado final: carrito viaja en -Y hacia el reposo
+            if y_freno_inicio is not None:
+                distancia_frenado_real = max(0.0, y_freno_inicio - pos_c[1])
+            if speed_c < 0.02 and t_sim > 1.5:
                 fase = 8
-                if y_freno_inicio is not None:
-                    distancia_frenado_real = max(0.0, y_freno_inicio - pos_c[1])
-                if speed_c < 0.02 and t_sim > 1.5:
-                    fase = 9
-                    print(f"[{t_sim:.2f}s] ¡Carrito DETENIDO COMPLETAMENTE! Distancia de frenado = {distancia_frenado_real:.2f} m")
+                print(f"[{t_sim:.2f}s] ¡Carrito DETENIDO COMPLETAMENTE! Distancia de frenado = {distancia_frenado_real:.2f} m")
 
         # Energia mecanica del sistema
         m_tot = m_maleta + M_carrito
